@@ -40,8 +40,8 @@ function save(context, callback) {
         name = (meta && meta.name) || 'map.geojson',
         map = context.data.get('map');
 
-    var description = (source && source.description) || 'via:geojson.io',
-        public = source ? !!source.public : false;
+    // var description = (source && source.description) || 'via:geojson.io',
+    //     public = source ? !!source.public : false;
 
     context.user.details(onuser);
 
