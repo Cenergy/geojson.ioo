@@ -4,7 +4,7 @@ var shpwrite = require('shp-write'),
     topojson = require('topojson'),
     saveAs = require('filesaver.js'),
     tokml = require('tokml'),
-    githubBrowser = require('@mapbox/github-file-browser'),
+    // githubBrowser = require('@mapbox/github-file-browser'),
     gistBrowser = require('@mapbox/gist-map-browser'),
     geojsonNormalize = require('geojson-normalize'),
     wellknown = require('wellknown');
@@ -276,45 +276,45 @@ module.exports = function fileBar(context) {
         context.dispatch.on('change.filebar', onchange);
 
         function clickGitHubOpen() {
-            if (!context.user.token()) return flash(context.container, 'You must authenticate to use this API.');
+            // if (!context.user.token()) return flash(context.container, 'You must authenticate to use this API.');
 
-            var m = modal(d3.select('div.geojsonio'));
+            // var m = modal(d3.select('div.geojsonio'));
 
-            m.select('.m')
-                .attr('class', 'modal-splash modal col6');
+            // m.select('.m')
+            //     .attr('class', 'modal-splash modal col6');
 
-            m.select('.content')
-                .append('div')
-                .attr('class', 'header pad2 fillD')
-                .append('h1')
-                .text('GitHub');
+            // m.select('.content')
+            //     .append('div')
+            //     .attr('class', 'header pad2 fillD')
+            //     .append('h1')
+            //     .text('GitHub');
 
-            githubBrowser(context.user.token(), false, githubBase)
-                .open()
-                .onclick(function(d) {
-                    if (!d || !d.length) return;
-                    var last = d[d.length - 1];
-                    if (!last.path) {
-                        throw new Error('last is invalid: ' + JSON.stringify(last));
-                    }
-                    if (!last.path.match(/\.(geo)?json/i)) {
-                        return alert('only GeoJSON files are supported from GitHub');
-                    }
-                    if (last.type === 'blob') {
-                        githubBrowser.request('/repos/' + d[1].full_name +
-                            '/git/blobs/' + last.sha, function(err, blob) {
-                                d.content = JSON.parse(decodeURIComponent(Array.prototype.map.call(atob(blob[0].content), function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')));
-                                context.data.parse(d);
-                                zoomextent(context);
-                                m.close();
-                            });
-                    }
-                })
-                .appendTo(
-                    m.select('.content')
-                        .append('div')
-                        .attr('class', 'repos pad2')
-                        .node());
+            // githubBrowser(context.user.token(), false, githubBase)
+            //     .open()
+            //     .onclick(function(d) {
+            //         if (!d || !d.length) return;
+            //         var last = d[d.length - 1];
+            //         if (!last.path) {
+            //             throw new Error('last is invalid: ' + JSON.stringify(last));
+            //         }
+            //         if (!last.path.match(/\.(geo)?json/i)) {
+            //             return alert('only GeoJSON files are supported from GitHub');
+            //         }
+            //         if (last.type === 'blob') {
+            //             githubBrowser.request('/repos/' + d[1].full_name +
+            //                 '/git/blobs/' + last.sha, function(err, blob) {
+            //                     d.content = JSON.parse(decodeURIComponent(Array.prototype.map.call(atob(blob[0].content), function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')));
+            //                     context.data.parse(d);
+            //                     zoomextent(context);
+            //                     m.close();
+            //                 });
+            //         }
+            //     })
+            //     .appendTo(
+            //         m.select('.content')
+            //             .append('div')
+            //             .attr('class', 'repos pad2')
+            //             .node());
         }
 
         function clickGitHubSave() {

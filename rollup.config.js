@@ -9,18 +9,24 @@ export default [
     input: ["./src/delegate.js"],
     output: {
       file: "./dist/delegate.js",
-      format: "umd",
+      format: "iife",
       name: "delegate",
-    },   
+    },
     plugins: [resolve(), commonjs(), babel(), terser()],
+    external: ["fs"],
   },
   {
     input: "src/index.js",
     output: {
       file: "dist/site.js",
-      format: "cjs",
+      format: "umd",
       name: "site",
     },
-    plugins: [resolve()],
+    plugins: [
+      resolve(),
+      commonjs(),
+      babel(),
+      json(),
+    ],
   },
 ];

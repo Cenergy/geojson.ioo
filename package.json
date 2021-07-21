@@ -28,7 +28,7 @@
     "leaflet-draw": "0.2.3",
     "leaflet-geodesy": "0.1.1",
     "leaflet-hash": "0.2.1",
-    "mapbox.js": "2.2.2",
+    "mapbox.js": "3.3.1",
     "marked": "0.3.2",
     "osmtogeojson": "2.0.5",
     "polyline": "^0.2.0",
@@ -55,7 +55,8 @@
     "@rollup/plugin-node-resolve": "^13.0.2",
     "babel-loader": "^8.0.5",
     "babel-plugin-syntax-dynamic-import": "^6.18.0",
-    "browserify": "^14.0.0",
+    "babel-preset-latest": "^6.24.1",
+    "browserify": "^14.5.0",
     "eslint": "^1.10.3",
     "rollup": "^2.53.1",
     "rollup-plugin-babel": "^4.4.0",
@@ -75,7 +76,7 @@
     "test": "eslint src",
     "test-browser": "browserify test/index.js | testling",
     "build": "rollup -c",
-    "webpack": "webpack -w"
+    "webpack": "webpack"
   },
   "repository": {
     "type": "git",
