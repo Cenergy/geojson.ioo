@@ -76,7 +76,8 @@
     "test": "eslint src",
     "test-browser": "browserify test/index.js | testling",
     "build": "rollup -c",
-    "webpack": "webpack"
+    "webpack": "webpack",
+    "browserify": "browserify --noparse=src/source/local.js -t brfs -r topojson  src/index.js > dist/site.js"
   },
   "repository": {
     "type": "git",
