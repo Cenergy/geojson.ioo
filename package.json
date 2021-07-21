@@ -77,7 +77,7 @@
     "test-browser": "browserify test/index.js | testling",
     "build": "rollup -c",
     "webpack": "webpack",
-    "browserify": "browserify --noparse=src/source/local.js -t brfs -r topojson  src/index.js > dist/site.js"
+    "browserify": "browserify --noparse=src/source/local.js -t brfs -r topojson  src/index.js > dist/site.js && browserify --noparse=src/source/local.js -t brfs -r topojson src/mobile.js > dist/site.mobile.js"
   },
   "repository": {
     "type": "git",

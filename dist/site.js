@@ -1329,7 +1329,669 @@ function page(postfix, callback) {
     });
 }
 
-},{"browser-request":3}],3:[function(require,module,exports){
+},{"browser-request":5}],3:[function(require,module,exports){
+(function (global){(function (){
+'use strict';
+
+var objectAssign = require('object-assign');
+
+// compare and isBuffer taken from https://github.com/feross/buffer/blob/680e9e5e488f22aac27599a57dc844a6315928dd/index.js
+// original notice:
+
+/*!
+ * The buffer module from node.js, for the browser.
+ *
+ * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * @license  MIT
+ */
+function compare(a, b) {
+  if (a === b) {
+    return 0;
+  }
+
+  var x = a.length;
+  var y = b.length;
+
+  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
+    if (a[i] !== b[i]) {
+      x = a[i];
+      y = b[i];
+      break;
+    }
+  }
+
+  if (x < y) {
+    return -1;
+  }
+  if (y < x) {
+    return 1;
+  }
+  return 0;
+}
+function isBuffer(b) {
+  if (global.Buffer && typeof global.Buffer.isBuffer === 'function') {
+    return global.Buffer.isBuffer(b);
+  }
+  return !!(b != null && b._isBuffer);
+}
+
+// based on node assert, original notice:
+// NB: The URL to the CommonJS spec is kept just for tradition.
+//     node-assert has evolved a lot since then, both in API and behavior.
+
+// http://wiki.commonjs.org/wiki/Unit_Testing/1.0
+//
+// THIS IS NOT TESTED NOR LIKELY TO WORK OUTSIDE V8!
+//
+// Originally from narwhal.js (http://narwhaljs.org)
+// Copyright (c) 2009 Thomas Robinson <280north.com>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the 'Software'), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var util = require('util/');
+var hasOwn = Object.prototype.hasOwnProperty;
+var pSlice = Array.prototype.slice;
+var functionsHaveNames = (function () {
+  return function foo() {}.name === 'foo';
+}());
+function pToString (obj) {
+  return Object.prototype.toString.call(obj);
+}
+function isView(arrbuf) {
+  if (isBuffer(arrbuf)) {
+    return false;
+  }
+  if (typeof global.ArrayBuffer !== 'function') {
+    return false;
+  }
+  if (typeof ArrayBuffer.isView === 'function') {
+    return ArrayBuffer.isView(arrbuf);
+  }
+  if (!arrbuf) {
+    return false;
+  }
+  if (arrbuf instanceof DataView) {
+    return true;
+  }
+  if (arrbuf.buffer && arrbuf.buffer instanceof ArrayBuffer) {
+    return true;
+  }
+  return false;
+}
+// 1. The assert module provides functions that throw
+// AssertionError's when particular conditions are not met. The
+// assert module must conform to the following interface.
+
+var assert = module.exports = ok;
+
+// 2. The AssertionError is defined in assert.
+// new assert.AssertionError({ message: message,
+//                             actual: actual,
+//                             expected: expected })
+
+var regex = /\s*function\s+([^\(\s]*)\s*/;
+// based on https://github.com/ljharb/function.prototype.name/blob/adeeeec8bfcc6068b187d7d9fb3d5bb1d3a30899/implementation.js
+function getName(func) {
+  if (!util.isFunction(func)) {
+    return;
+  }
+  if (functionsHaveNames) {
+    return func.name;
+  }
+  var str = func.toString();
+  var match = str.match(regex);
+  return match && match[1];
+}
+assert.AssertionError = function AssertionError(options) {
+  this.name = 'AssertionError';
+  this.actual = options.actual;
+  this.expected = options.expected;
+  this.operator = options.operator;
+  if (options.message) {
+    this.message = options.message;
+    this.generatedMessage = false;
+  } else {
+    this.message = getMessage(this);
+    this.generatedMessage = true;
+  }
+  var stackStartFunction = options.stackStartFunction || fail;
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, stackStartFunction);
+  } else {
+    // non v8 browsers so we can have a stacktrace
+    var err = new Error();
+    if (err.stack) {
+      var out = err.stack;
+
+      // try to strip useless frames
+      var fn_name = getName(stackStartFunction);
+      var idx = out.indexOf('\n' + fn_name);
+      if (idx >= 0) {
+        // once we have located the function frame
+        // we need to strip out everything before it (and its line)
+        var next_line = out.indexOf('\n', idx + 1);
+        out = out.substring(next_line + 1);
+      }
+
+      this.stack = out;
+    }
+  }
+};
+
+// assert.AssertionError instanceof Error
+util.inherits(assert.AssertionError, Error);
+
+function truncate(s, n) {
+  if (typeof s === 'string') {
+    return s.length < n ? s : s.slice(0, n);
+  } else {
+    return s;
+  }
+}
+function inspect(something) {
+  if (functionsHaveNames || !util.isFunction(something)) {
+    return util.inspect(something);
+  }
+  var rawname = getName(something);
+  var name = rawname ? ': ' + rawname : '';
+  return '[Function' +  name + ']';
+}
+function getMessage(self) {
+  return truncate(inspect(self.actual), 128) + ' ' +
+         self.operator + ' ' +
+         truncate(inspect(self.expected), 128);
+}
+
+// At present only the three keys mentioned above are used and
+// understood by the spec. Implementations or sub modules can pass
+// other keys to the AssertionError's constructor - they will be
+// ignored.
+
+// 3. All of the following functions must throw an AssertionError
+// when a corresponding condition is not met, with a message that
+// may be undefined if not provided.  All assertion methods provide
+// both the actual and expected values to the assertion error for
+// display purposes.
+
+function fail(actual, expected, message, operator, stackStartFunction) {
+  throw new assert.AssertionError({
+    message: message,
+    actual: actual,
+    expected: expected,
+    operator: operator,
+    stackStartFunction: stackStartFunction
+  });
+}
+
+// EXTENSION! allows for well behaved errors defined elsewhere.
+assert.fail = fail;
+
+// 4. Pure assertion tests whether a value is truthy, as determined
+// by !!guard.
+// assert.ok(guard, message_opt);
+// This statement is equivalent to assert.equal(true, !!guard,
+// message_opt);. To test strictly for the value true, use
+// assert.strictEqual(true, guard, message_opt);.
+
+function ok(value, message) {
+  if (!value) fail(value, true, message, '==', assert.ok);
+}
+assert.ok = ok;
+
+// 5. The equality assertion tests shallow, coercive equality with
+// ==.
+// assert.equal(actual, expected, message_opt);
+
+assert.equal = function equal(actual, expected, message) {
+  if (actual != expected) fail(actual, expected, message, '==', assert.equal);
+};
+
+// 6. The non-equality assertion tests for whether two objects are not equal
+// with != assert.notEqual(actual, expected, message_opt);
+
+assert.notEqual = function notEqual(actual, expected, message) {
+  if (actual == expected) {
+    fail(actual, expected, message, '!=', assert.notEqual);
+  }
+};
+
+// 7. The equivalence assertion tests a deep equality relation.
+// assert.deepEqual(actual, expected, message_opt);
+
+assert.deepEqual = function deepEqual(actual, expected, message) {
+  if (!_deepEqual(actual, expected, false)) {
+    fail(actual, expected, message, 'deepEqual', assert.deepEqual);
+  }
+};
+
+assert.deepStrictEqual = function deepStrictEqual(actual, expected, message) {
+  if (!_deepEqual(actual, expected, true)) {
+    fail(actual, expected, message, 'deepStrictEqual', assert.deepStrictEqual);
+  }
+};
+
+function _deepEqual(actual, expected, strict, memos) {
+  // 7.1. All identical values are equivalent, as determined by ===.
+  if (actual === expected) {
+    return true;
+  } else if (isBuffer(actual) && isBuffer(expected)) {
+    return compare(actual, expected) === 0;
+
+  // 7.2. If the expected value is a Date object, the actual value is
+  // equivalent if it is also a Date object that refers to the same time.
+  } else if (util.isDate(actual) && util.isDate(expected)) {
+    return actual.getTime() === expected.getTime();
+
+  // 7.3 If the expected value is a RegExp object, the actual value is
+  // equivalent if it is also a RegExp object with the same source and
+  // properties (`global`, `multiline`, `lastIndex`, `ignoreCase`).
+  } else if (util.isRegExp(actual) && util.isRegExp(expected)) {
+    return actual.source === expected.source &&
+           actual.global === expected.global &&
+           actual.multiline === expected.multiline &&
+           actual.lastIndex === expected.lastIndex &&
+           actual.ignoreCase === expected.ignoreCase;
+
+  // 7.4. Other pairs that do not both pass typeof value == 'object',
+  // equivalence is determined by ==.
+  } else if ((actual === null || typeof actual !== 'object') &&
+             (expected === null || typeof expected !== 'object')) {
+    return strict ? actual === expected : actual == expected;
+
+  // If both values are instances of typed arrays, wrap their underlying
+  // ArrayBuffers in a Buffer each to increase performance
+  // This optimization requires the arrays to have the same type as checked by
+  // Object.prototype.toString (aka pToString). Never perform binary
+  // comparisons for Float*Arrays, though, since e.g. +0 === -0 but their
+  // bit patterns are not identical.
+  } else if (isView(actual) && isView(expected) &&
+             pToString(actual) === pToString(expected) &&
+             !(actual instanceof Float32Array ||
+               actual instanceof Float64Array)) {
+    return compare(new Uint8Array(actual.buffer),
+                   new Uint8Array(expected.buffer)) === 0;
+
+  // 7.5 For all other Object pairs, including Array objects, equivalence is
+  // determined by having the same number of owned properties (as verified
+  // with Object.prototype.hasOwnProperty.call), the same set of keys
+  // (although not necessarily the same order), equivalent values for every
+  // corresponding key, and an identical 'prototype' property. Note: this
+  // accounts for both named and indexed properties on Arrays.
+  } else if (isBuffer(actual) !== isBuffer(expected)) {
+    return false;
+  } else {
+    memos = memos || {actual: [], expected: []};
+
+    var actualIndex = memos.actual.indexOf(actual);
+    if (actualIndex !== -1) {
+      if (actualIndex === memos.expected.indexOf(expected)) {
+        return true;
+      }
+    }
+
+    memos.actual.push(actual);
+    memos.expected.push(expected);
+
+    return objEquiv(actual, expected, strict, memos);
+  }
+}
+
+function isArguments(object) {
+  return Object.prototype.toString.call(object) == '[object Arguments]';
+}
+
+function objEquiv(a, b, strict, actualVisitedObjects) {
+  if (a === null || a === undefined || b === null || b === undefined)
+    return false;
+  // if one is a primitive, the other must be same
+  if (util.isPrimitive(a) || util.isPrimitive(b))
+    return a === b;
+  if (strict && Object.getPrototypeOf(a) !== Object.getPrototypeOf(b))
+    return false;
+  var aIsArgs = isArguments(a);
+  var bIsArgs = isArguments(b);
+  if ((aIsArgs && !bIsArgs) || (!aIsArgs && bIsArgs))
+    return false;
+  if (aIsArgs) {
+    a = pSlice.call(a);
+    b = pSlice.call(b);
+    return _deepEqual(a, b, strict);
+  }
+  var ka = objectKeys(a);
+  var kb = objectKeys(b);
+  var key, i;
+  // having the same number of owned properties (keys incorporates
+  // hasOwnProperty)
+  if (ka.length !== kb.length)
+    return false;
+  //the same set of keys (although not necessarily the same order),
+  ka.sort();
+  kb.sort();
+  //~~~cheap key test
+  for (i = ka.length - 1; i >= 0; i--) {
+    if (ka[i] !== kb[i])
+      return false;
+  }
+  //equivalent values for every corresponding key, and
+  //~~~possibly expensive deep test
+  for (i = ka.length - 1; i >= 0; i--) {
+    key = ka[i];
+    if (!_deepEqual(a[key], b[key], strict, actualVisitedObjects))
+      return false;
+  }
+  return true;
+}
+
+// 8. The non-equivalence assertion tests for any deep inequality.
+// assert.notDeepEqual(actual, expected, message_opt);
+
+assert.notDeepEqual = function notDeepEqual(actual, expected, message) {
+  if (_deepEqual(actual, expected, false)) {
+    fail(actual, expected, message, 'notDeepEqual', assert.notDeepEqual);
+  }
+};
+
+assert.notDeepStrictEqual = notDeepStrictEqual;
+function notDeepStrictEqual(actual, expected, message) {
+  if (_deepEqual(actual, expected, true)) {
+    fail(actual, expected, message, 'notDeepStrictEqual', notDeepStrictEqual);
+  }
+}
+
+
+// 9. The strict equality assertion tests strict equality, as determined by ===.
+// assert.strictEqual(actual, expected, message_opt);
+
+assert.strictEqual = function strictEqual(actual, expected, message) {
+  if (actual !== expected) {
+    fail(actual, expected, message, '===', assert.strictEqual);
+  }
+};
+
+// 10. The strict non-equality assertion tests for strict inequality, as
+// determined by !==.  assert.notStrictEqual(actual, expected, message_opt);
+
+assert.notStrictEqual = function notStrictEqual(actual, expected, message) {
+  if (actual === expected) {
+    fail(actual, expected, message, '!==', assert.notStrictEqual);
+  }
+};
+
+function expectedException(actual, expected) {
+  if (!actual || !expected) {
+    return false;
+  }
+
+  if (Object.prototype.toString.call(expected) == '[object RegExp]') {
+    return expected.test(actual);
+  }
+
+  try {
+    if (actual instanceof expected) {
+      return true;
+    }
+  } catch (e) {
+    // Ignore.  The instanceof check doesn't work for arrow functions.
+  }
+
+  if (Error.isPrototypeOf(expected)) {
+    return false;
+  }
+
+  return expected.call({}, actual) === true;
+}
+
+function _tryBlock(block) {
+  var error;
+  try {
+    block();
+  } catch (e) {
+    error = e;
+  }
+  return error;
+}
+
+function _throws(shouldThrow, block, expected, message) {
+  var actual;
+
+  if (typeof block !== 'function') {
+    throw new TypeError('"block" argument must be a function');
+  }
+
+  if (typeof expected === 'string') {
+    message = expected;
+    expected = null;
+  }
+
+  actual = _tryBlock(block);
+
+  message = (expected && expected.name ? ' (' + expected.name + ').' : '.') +
+            (message ? ' ' + message : '.');
+
+  if (shouldThrow && !actual) {
+    fail(actual, expected, 'Missing expected exception' + message);
+  }
+
+  var userProvidedMessage = typeof message === 'string';
+  var isUnwantedException = !shouldThrow && util.isError(actual);
+  var isUnexpectedException = !shouldThrow && actual && !expected;
+
+  if ((isUnwantedException &&
+      userProvidedMessage &&
+      expectedException(actual, expected)) ||
+      isUnexpectedException) {
+    fail(actual, expected, 'Got unwanted exception' + message);
+  }
+
+  if ((shouldThrow && actual && expected &&
+      !expectedException(actual, expected)) || (!shouldThrow && actual)) {
+    throw actual;
+  }
+}
+
+// 11. Expected to throw an error:
+// assert.throws(block, Error_opt, message_opt);
+
+assert.throws = function(block, /*optional*/error, /*optional*/message) {
+  _throws(true, block, error, message);
+};
+
+// EXTENSION! This is annoying to write outside this module.
+assert.doesNotThrow = function(block, /*optional*/error, /*optional*/message) {
+  _throws(false, block, error, message);
+};
+
+assert.ifError = function(err) { if (err) throw err; };
+
+// Expose a strict only variant of assert
+function strict(value, message) {
+  if (!value) fail(value, true, message, '==', strict);
+}
+assert.strict = objectAssign(strict, assert, {
+  equal: assert.strictEqual,
+  deepEqual: assert.deepStrictEqual,
+  notEqual: assert.notStrictEqual,
+  notDeepEqual: assert.notDeepStrictEqual
+});
+assert.strict.strict = assert.strict;
+
+var objectKeys = Object.keys || function (obj) {
+  var keys = [];
+  for (var key in obj) {
+    if (hasOwn.call(obj, key)) keys.push(key);
+  }
+  return keys;
+};
+
+}).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"object-assign":65,"util/":139}],4:[function(require,module,exports){
+'use strict'
+
+exports.byteLength = byteLength
+exports.toByteArray = toByteArray
+exports.fromByteArray = fromByteArray
+
+var lookup = []
+var revLookup = []
+var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
+
+var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+for (var i = 0, len = code.length; i < len; ++i) {
+  lookup[i] = code[i]
+  revLookup[code.charCodeAt(i)] = i
+}
+
+// Support decoding URL-safe base64 strings, as Node.js does.
+// See: https://en.wikipedia.org/wiki/Base64#URL_applications
+revLookup['-'.charCodeAt(0)] = 62
+revLookup['_'.charCodeAt(0)] = 63
+
+function getLens (b64) {
+  var len = b64.length
+
+  if (len % 4 > 0) {
+    throw new Error('Invalid string. Length must be a multiple of 4')
+  }
+
+  // Trim off extra bytes after placeholder bytes are found
+  // See: https://github.com/beatgammit/base64-js/issues/42
+  var validLen = b64.indexOf('=')
+  if (validLen === -1) validLen = len
+
+  var placeHoldersLen = validLen === len
+    ? 0
+    : 4 - (validLen % 4)
+
+  return [validLen, placeHoldersLen]
+}
+
+// base64 is 4/3 + up to two characters of the original data
+function byteLength (b64) {
+  var lens = getLens(b64)
+  var validLen = lens[0]
+  var placeHoldersLen = lens[1]
+  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
+}
+
+function _byteLength (b64, validLen, placeHoldersLen) {
+  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
+}
+
+function toByteArray (b64) {
+  var tmp
+  var lens = getLens(b64)
+  var validLen = lens[0]
+  var placeHoldersLen = lens[1]
+
+  var arr = new Arr(_byteLength(b64, validLen, placeHoldersLen))
+
+  var curByte = 0
+
+  // if there are placeholders, only get up to the last complete 4 chars
+  var len = placeHoldersLen > 0
+    ? validLen - 4
+    : validLen
+
+  var i
+  for (i = 0; i < len; i += 4) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 18) |
+      (revLookup[b64.charCodeAt(i + 1)] << 12) |
+      (revLookup[b64.charCodeAt(i + 2)] << 6) |
+      revLookup[b64.charCodeAt(i + 3)]
+    arr[curByte++] = (tmp >> 16) & 0xFF
+    arr[curByte++] = (tmp >> 8) & 0xFF
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  if (placeHoldersLen === 2) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 2) |
+      (revLookup[b64.charCodeAt(i + 1)] >> 4)
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  if (placeHoldersLen === 1) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 10) |
+      (revLookup[b64.charCodeAt(i + 1)] << 4) |
+      (revLookup[b64.charCodeAt(i + 2)] >> 2)
+    arr[curByte++] = (tmp >> 8) & 0xFF
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  return arr
+}
+
+function tripletToBase64 (num) {
+  return lookup[num >> 18 & 0x3F] +
+    lookup[num >> 12 & 0x3F] +
+    lookup[num >> 6 & 0x3F] +
+    lookup[num & 0x3F]
+}
+
+function encodeChunk (uint8, start, end) {
+  var tmp
+  var output = []
+  for (var i = start; i < end; i += 3) {
+    tmp =
+      ((uint8[i] << 16) & 0xFF0000) +
+      ((uint8[i + 1] << 8) & 0xFF00) +
+      (uint8[i + 2] & 0xFF)
+    output.push(tripletToBase64(tmp))
+  }
+  return output.join('')
+}
+
+function fromByteArray (uint8) {
+  var tmp
+  var len = uint8.length
+  var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
+  var parts = []
+  var maxChunkLength = 16383 // must be multiple of 3
+
+  // go through the array every three bytes, we'll deal with trailing stuff later
+  for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
+    parts.push(encodeChunk(uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)))
+  }
+
+  // pad the end with zeros, but make sure to not forget the extra bytes
+  if (extraBytes === 1) {
+    tmp = uint8[len - 1]
+    parts.push(
+      lookup[tmp >> 2] +
+      lookup[(tmp << 4) & 0x3F] +
+      '=='
+    )
+  } else if (extraBytes === 2) {
+    tmp = (uint8[len - 2] << 8) + uint8[len - 1]
+    parts.push(
+      lookup[tmp >> 10] +
+      lookup[(tmp >> 4) & 0x3F] +
+      lookup[(tmp << 2) & 0x3F] +
+      '='
+    )
+  }
+
+  return parts.join('')
+}
+
+},{}],5:[function(require,module,exports){
 // Browser Request
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1825,7 +2487,1832 @@ function b64_enc (data) {
 }));
 //UMD FOOTER END
 
-},{}],4:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
+
+},{}],7:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],8:[function(require,module,exports){
+(function (Buffer){(function (){
+/*!
+ * The buffer module from node.js, for the browser.
+ *
+ * @author   Feross Aboukhadijeh <https://feross.org>
+ * @license  MIT
+ */
+/* eslint-disable no-proto */
+
+'use strict'
+
+var base64 = require('base64-js')
+var ieee754 = require('ieee754')
+var customInspectSymbol =
+  (typeof Symbol === 'function' && typeof Symbol['for'] === 'function') // eslint-disable-line dot-notation
+    ? Symbol['for']('nodejs.util.inspect.custom') // eslint-disable-line dot-notation
+    : null
+
+exports.Buffer = Buffer
+exports.SlowBuffer = SlowBuffer
+exports.INSPECT_MAX_BYTES = 50
+
+var K_MAX_LENGTH = 0x7fffffff
+exports.kMaxLength = K_MAX_LENGTH
+
+/**
+ * If `Buffer.TYPED_ARRAY_SUPPORT`:
+ *   === true    Use Uint8Array implementation (fastest)
+ *   === false   Print warning and recommend using `buffer` v4.x which has an Object
+ *               implementation (most compatible, even IE6)
+ *
+ * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
+ * Opera 11.6+, iOS 4.2+.
+ *
+ * We report that the browser does not support typed arrays if the are not subclassable
+ * using __proto__. Firefox 4-29 lacks support for adding new properties to `Uint8Array`
+ * (See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438). IE 10 lacks support
+ * for __proto__ and has a buggy typed array implementation.
+ */
+Buffer.TYPED_ARRAY_SUPPORT = typedArraySupport()
+
+if (!Buffer.TYPED_ARRAY_SUPPORT && typeof console !== 'undefined' &&
+    typeof console.error === 'function') {
+  console.error(
+    'This browser lacks typed array (Uint8Array) support which is required by ' +
+    '`buffer` v5.x. Use `buffer` v4.x if you require old browser support.'
+  )
+}
+
+function typedArraySupport () {
+  // Can typed array instances can be augmented?
+  try {
+    var arr = new Uint8Array(1)
+    var proto = { foo: function () { return 42 } }
+    Object.setPrototypeOf(proto, Uint8Array.prototype)
+    Object.setPrototypeOf(arr, proto)
+    return arr.foo() === 42
+  } catch (e) {
+    return false
+  }
+}
+
+Object.defineProperty(Buffer.prototype, 'parent', {
+  enumerable: true,
+  get: function () {
+    if (!Buffer.isBuffer(this)) return undefined
+    return this.buffer
+  }
+})
+
+Object.defineProperty(Buffer.prototype, 'offset', {
+  enumerable: true,
+  get: function () {
+    if (!Buffer.isBuffer(this)) return undefined
+    return this.byteOffset
+  }
+})
+
+function createBuffer (length) {
+  if (length > K_MAX_LENGTH) {
+    throw new RangeError('The value "' + length + '" is invalid for option "size"')
+  }
+  // Return an augmented `Uint8Array` instance
+  var buf = new Uint8Array(length)
+  Object.setPrototypeOf(buf, Buffer.prototype)
+  return buf
+}
+
+/**
+ * The Buffer constructor returns instances of `Uint8Array` that have their
+ * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
+ * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
+ * and the `Uint8Array` methods. Square bracket notation works as expected -- it
+ * returns a single octet.
+ *
+ * The `Uint8Array` prototype remains unmodified.
+ */
+
+function Buffer (arg, encodingOrOffset, length) {
+  // Common case.
+  if (typeof arg === 'number') {
+    if (typeof encodingOrOffset === 'string') {
+      throw new TypeError(
+        'The "string" argument must be of type string. Received type number'
+      )
+    }
+    return allocUnsafe(arg)
+  }
+  return from(arg, encodingOrOffset, length)
+}
+
+Buffer.poolSize = 8192 // not used by this implementation
+
+function from (value, encodingOrOffset, length) {
+  if (typeof value === 'string') {
+    return fromString(value, encodingOrOffset)
+  }
+
+  if (ArrayBuffer.isView(value)) {
+    return fromArrayView(value)
+  }
+
+  if (value == null) {
+    throw new TypeError(
+      'The first argument must be one of type string, Buffer, ArrayBuffer, Array, ' +
+      'or Array-like Object. Received type ' + (typeof value)
+    )
+  }
+
+  if (isInstance(value, ArrayBuffer) ||
+      (value && isInstance(value.buffer, ArrayBuffer))) {
+    return fromArrayBuffer(value, encodingOrOffset, length)
+  }
+
+  if (typeof SharedArrayBuffer !== 'undefined' &&
+      (isInstance(value, SharedArrayBuffer) ||
+      (value && isInstance(value.buffer, SharedArrayBuffer)))) {
+    return fromArrayBuffer(value, encodingOrOffset, length)
+  }
+
+  if (typeof value === 'number') {
+    throw new TypeError(
+      'The "value" argument must not be of type number. Received type number'
+    )
+  }
+
+  var valueOf = value.valueOf && value.valueOf()
+  if (valueOf != null && valueOf !== value) {
+    return Buffer.from(valueOf, encodingOrOffset, length)
+  }
+
+  var b = fromObject(value)
+  if (b) return b
+
+  if (typeof Symbol !== 'undefined' && Symbol.toPrimitive != null &&
+      typeof value[Symbol.toPrimitive] === 'function') {
+    return Buffer.from(
+      value[Symbol.toPrimitive]('string'), encodingOrOffset, length
+    )
+  }
+
+  throw new TypeError(
+    'The first argument must be one of type string, Buffer, ArrayBuffer, Array, ' +
+    'or Array-like Object. Received type ' + (typeof value)
+  )
+}
+
+/**
+ * Functionally equivalent to Buffer(arg, encoding) but throws a TypeError
+ * if value is a number.
+ * Buffer.from(str[, encoding])
+ * Buffer.from(array)
+ * Buffer.from(buffer)
+ * Buffer.from(arrayBuffer[, byteOffset[, length]])
+ **/
+Buffer.from = function (value, encodingOrOffset, length) {
+  return from(value, encodingOrOffset, length)
+}
+
+// Note: Change prototype *after* Buffer.from is defined to workaround Chrome bug:
+// https://github.com/feross/buffer/pull/148
+Object.setPrototypeOf(Buffer.prototype, Uint8Array.prototype)
+Object.setPrototypeOf(Buffer, Uint8Array)
+
+function assertSize (size) {
+  if (typeof size !== 'number') {
+    throw new TypeError('"size" argument must be of type number')
+  } else if (size < 0) {
+    throw new RangeError('The value "' + size + '" is invalid for option "size"')
+  }
+}
+
+function alloc (size, fill, encoding) {
+  assertSize(size)
+  if (size <= 0) {
+    return createBuffer(size)
+  }
+  if (fill !== undefined) {
+    // Only pay attention to encoding if it's a string. This
+    // prevents accidentally sending in a number that would
+    // be interpreted as a start offset.
+    return typeof encoding === 'string'
+      ? createBuffer(size).fill(fill, encoding)
+      : createBuffer(size).fill(fill)
+  }
+  return createBuffer(size)
+}
+
+/**
+ * Creates a new filled Buffer instance.
+ * alloc(size[, fill[, encoding]])
+ **/
+Buffer.alloc = function (size, fill, encoding) {
+  return alloc(size, fill, encoding)
+}
+
+function allocUnsafe (size) {
+  assertSize(size)
+  return createBuffer(size < 0 ? 0 : checked(size) | 0)
+}
+
+/**
+ * Equivalent to Buffer(num), by default creates a non-zero-filled Buffer instance.
+ * */
+Buffer.allocUnsafe = function (size) {
+  return allocUnsafe(size)
+}
+/**
+ * Equivalent to SlowBuffer(num), by default creates a non-zero-filled Buffer instance.
+ */
+Buffer.allocUnsafeSlow = function (size) {
+  return allocUnsafe(size)
+}
+
+function fromString (string, encoding) {
+  if (typeof encoding !== 'string' || encoding === '') {
+    encoding = 'utf8'
+  }
+
+  if (!Buffer.isEncoding(encoding)) {
+    throw new TypeError('Unknown encoding: ' + encoding)
+  }
+
+  var length = byteLength(string, encoding) | 0
+  var buf = createBuffer(length)
+
+  var actual = buf.write(string, encoding)
+
+  if (actual !== length) {
+    // Writing a hex string, for example, that contains invalid characters will
+    // cause everything after the first invalid character to be ignored. (e.g.
+    // 'abxxcd' will be treated as 'ab')
+    buf = buf.slice(0, actual)
+  }
+
+  return buf
+}
+
+function fromArrayLike (array) {
+  var length = array.length < 0 ? 0 : checked(array.length) | 0
+  var buf = createBuffer(length)
+  for (var i = 0; i < length; i += 1) {
+    buf[i] = array[i] & 255
+  }
+  return buf
+}
+
+function fromArrayView (arrayView) {
+  if (isInstance(arrayView, Uint8Array)) {
+    var copy = new Uint8Array(arrayView)
+    return fromArrayBuffer(copy.buffer, copy.byteOffset, copy.byteLength)
+  }
+  return fromArrayLike(arrayView)
+}
+
+function fromArrayBuffer (array, byteOffset, length) {
+  if (byteOffset < 0 || array.byteLength < byteOffset) {
+    throw new RangeError('"offset" is outside of buffer bounds')
+  }
+
+  if (array.byteLength < byteOffset + (length || 0)) {
+    throw new RangeError('"length" is outside of buffer bounds')
+  }
+
+  var buf
+  if (byteOffset === undefined && length === undefined) {
+    buf = new Uint8Array(array)
+  } else if (length === undefined) {
+    buf = new Uint8Array(array, byteOffset)
+  } else {
+    buf = new Uint8Array(array, byteOffset, length)
+  }
+
+  // Return an augmented `Uint8Array` instance
+  Object.setPrototypeOf(buf, Buffer.prototype)
+
+  return buf
+}
+
+function fromObject (obj) {
+  if (Buffer.isBuffer(obj)) {
+    var len = checked(obj.length) | 0
+    var buf = createBuffer(len)
+
+    if (buf.length === 0) {
+      return buf
+    }
+
+    obj.copy(buf, 0, 0, len)
+    return buf
+  }
+
+  if (obj.length !== undefined) {
+    if (typeof obj.length !== 'number' || numberIsNaN(obj.length)) {
+      return createBuffer(0)
+    }
+    return fromArrayLike(obj)
+  }
+
+  if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
+    return fromArrayLike(obj.data)
+  }
+}
+
+function checked (length) {
+  // Note: cannot use `length < K_MAX_LENGTH` here because that fails when
+  // length is NaN (which is otherwise coerced to zero.)
+  if (length >= K_MAX_LENGTH) {
+    throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
+                         'size: 0x' + K_MAX_LENGTH.toString(16) + ' bytes')
+  }
+  return length | 0
+}
+
+function SlowBuffer (length) {
+  if (+length != length) { // eslint-disable-line eqeqeq
+    length = 0
+  }
+  return Buffer.alloc(+length)
+}
+
+Buffer.isBuffer = function isBuffer (b) {
+  return b != null && b._isBuffer === true &&
+    b !== Buffer.prototype // so Buffer.isBuffer(Buffer.prototype) will be false
+}
+
+Buffer.compare = function compare (a, b) {
+  if (isInstance(a, Uint8Array)) a = Buffer.from(a, a.offset, a.byteLength)
+  if (isInstance(b, Uint8Array)) b = Buffer.from(b, b.offset, b.byteLength)
+  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b)) {
+    throw new TypeError(
+      'The "buf1", "buf2" arguments must be one of type Buffer or Uint8Array'
+    )
+  }
+
+  if (a === b) return 0
+
+  var x = a.length
+  var y = b.length
+
+  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
+    if (a[i] !== b[i]) {
+      x = a[i]
+      y = b[i]
+      break
+    }
+  }
+
+  if (x < y) return -1
+  if (y < x) return 1
+  return 0
+}
+
+Buffer.isEncoding = function isEncoding (encoding) {
+  switch (String(encoding).toLowerCase()) {
+    case 'hex':
+    case 'utf8':
+    case 'utf-8':
+    case 'ascii':
+    case 'latin1':
+    case 'binary':
+    case 'base64':
+    case 'ucs2':
+    case 'ucs-2':
+    case 'utf16le':
+    case 'utf-16le':
+      return true
+    default:
+      return false
+  }
+}
+
+Buffer.concat = function concat (list, length) {
+  if (!Array.isArray(list)) {
+    throw new TypeError('"list" argument must be an Array of Buffers')
+  }
+
+  if (list.length === 0) {
+    return Buffer.alloc(0)
+  }
+
+  var i
+  if (length === undefined) {
+    length = 0
+    for (i = 0; i < list.length; ++i) {
+      length += list[i].length
+    }
+  }
+
+  var buffer = Buffer.allocUnsafe(length)
+  var pos = 0
+  for (i = 0; i < list.length; ++i) {
+    var buf = list[i]
+    if (isInstance(buf, Uint8Array)) {
+      if (pos + buf.length > buffer.length) {
+        Buffer.from(buf).copy(buffer, pos)
+      } else {
+        Uint8Array.prototype.set.call(
+          buffer,
+          buf,
+          pos
+        )
+      }
+    } else if (!Buffer.isBuffer(buf)) {
+      throw new TypeError('"list" argument must be an Array of Buffers')
+    } else {
+      buf.copy(buffer, pos)
+    }
+    pos += buf.length
+  }
+  return buffer
+}
+
+function byteLength (string, encoding) {
+  if (Buffer.isBuffer(string)) {
+    return string.length
+  }
+  if (ArrayBuffer.isView(string) || isInstance(string, ArrayBuffer)) {
+    return string.byteLength
+  }
+  if (typeof string !== 'string') {
+    throw new TypeError(
+      'The "string" argument must be one of type string, Buffer, or ArrayBuffer. ' +
+      'Received type ' + typeof string
+    )
+  }
+
+  var len = string.length
+  var mustMatch = (arguments.length > 2 && arguments[2] === true)
+  if (!mustMatch && len === 0) return 0
+
+  // Use a for loop to avoid recursion
+  var loweredCase = false
+  for (;;) {
+    switch (encoding) {
+      case 'ascii':
+      case 'latin1':
+      case 'binary':
+        return len
+      case 'utf8':
+      case 'utf-8':
+        return utf8ToBytes(string).length
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return len * 2
+      case 'hex':
+        return len >>> 1
+      case 'base64':
+        return base64ToBytes(string).length
+      default:
+        if (loweredCase) {
+          return mustMatch ? -1 : utf8ToBytes(string).length // assume utf8
+        }
+        encoding = ('' + encoding).toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+Buffer.byteLength = byteLength
+
+function slowToString (encoding, start, end) {
+  var loweredCase = false
+
+  // No need to verify that "this.length <= MAX_UINT32" since it's a read-only
+  // property of a typed array.
+
+  // This behaves neither like String nor Uint8Array in that we set start/end
+  // to their upper/lower bounds if the value passed is out of range.
+  // undefined is handled specially as per ECMA-262 6th Edition,
+  // Section 13.3.3.7 Runtime Semantics: KeyedBindingInitialization.
+  if (start === undefined || start < 0) {
+    start = 0
+  }
+  // Return early if start > this.length. Done here to prevent potential uint32
+  // coercion fail below.
+  if (start > this.length) {
+    return ''
+  }
+
+  if (end === undefined || end > this.length) {
+    end = this.length
+  }
+
+  if (end <= 0) {
+    return ''
+  }
+
+  // Force coercion to uint32. This will also coerce falsey/NaN values to 0.
+  end >>>= 0
+  start >>>= 0
+
+  if (end <= start) {
+    return ''
+  }
+
+  if (!encoding) encoding = 'utf8'
+
+  while (true) {
+    switch (encoding) {
+      case 'hex':
+        return hexSlice(this, start, end)
+
+      case 'utf8':
+      case 'utf-8':
+        return utf8Slice(this, start, end)
+
+      case 'ascii':
+        return asciiSlice(this, start, end)
+
+      case 'latin1':
+      case 'binary':
+        return latin1Slice(this, start, end)
+
+      case 'base64':
+        return base64Slice(this, start, end)
+
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return utf16leSlice(this, start, end)
+
+      default:
+        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
+        encoding = (encoding + '').toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+
+// This property is used by `Buffer.isBuffer` (and the `is-buffer` npm package)
+// to detect a Buffer instance. It's not possible to use `instanceof Buffer`
+// reliably in a browserify context because there could be multiple different
+// copies of the 'buffer' package in use. This method works even for Buffer
+// instances that were created from another copy of the `buffer` package.
+// See: https://github.com/feross/buffer/issues/154
+Buffer.prototype._isBuffer = true
+
+function swap (b, n, m) {
+  var i = b[n]
+  b[n] = b[m]
+  b[m] = i
+}
+
+Buffer.prototype.swap16 = function swap16 () {
+  var len = this.length
+  if (len % 2 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 16-bits')
+  }
+  for (var i = 0; i < len; i += 2) {
+    swap(this, i, i + 1)
+  }
+  return this
+}
+
+Buffer.prototype.swap32 = function swap32 () {
+  var len = this.length
+  if (len % 4 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 32-bits')
+  }
+  for (var i = 0; i < len; i += 4) {
+    swap(this, i, i + 3)
+    swap(this, i + 1, i + 2)
+  }
+  return this
+}
+
+Buffer.prototype.swap64 = function swap64 () {
+  var len = this.length
+  if (len % 8 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 64-bits')
+  }
+  for (var i = 0; i < len; i += 8) {
+    swap(this, i, i + 7)
+    swap(this, i + 1, i + 6)
+    swap(this, i + 2, i + 5)
+    swap(this, i + 3, i + 4)
+  }
+  return this
+}
+
+Buffer.prototype.toString = function toString () {
+  var length = this.length
+  if (length === 0) return ''
+  if (arguments.length === 0) return utf8Slice(this, 0, length)
+  return slowToString.apply(this, arguments)
+}
+
+Buffer.prototype.toLocaleString = Buffer.prototype.toString
+
+Buffer.prototype.equals = function equals (b) {
+  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
+  if (this === b) return true
+  return Buffer.compare(this, b) === 0
+}
+
+Buffer.prototype.inspect = function inspect () {
+  var str = ''
+  var max = exports.INSPECT_MAX_BYTES
+  str = this.toString('hex', 0, max).replace(/(.{2})/g, '$1 ').trim()
+  if (this.length > max) str += ' ... '
+  return '<Buffer ' + str + '>'
+}
+if (customInspectSymbol) {
+  Buffer.prototype[customInspectSymbol] = Buffer.prototype.inspect
+}
+
+Buffer.prototype.compare = function compare (target, start, end, thisStart, thisEnd) {
+  if (isInstance(target, Uint8Array)) {
+    target = Buffer.from(target, target.offset, target.byteLength)
+  }
+  if (!Buffer.isBuffer(target)) {
+    throw new TypeError(
+      'The "target" argument must be one of type Buffer or Uint8Array. ' +
+      'Received type ' + (typeof target)
+    )
+  }
+
+  if (start === undefined) {
+    start = 0
+  }
+  if (end === undefined) {
+    end = target ? target.length : 0
+  }
+  if (thisStart === undefined) {
+    thisStart = 0
+  }
+  if (thisEnd === undefined) {
+    thisEnd = this.length
+  }
+
+  if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
+    throw new RangeError('out of range index')
+  }
+
+  if (thisStart >= thisEnd && start >= end) {
+    return 0
+  }
+  if (thisStart >= thisEnd) {
+    return -1
+  }
+  if (start >= end) {
+    return 1
+  }
+
+  start >>>= 0
+  end >>>= 0
+  thisStart >>>= 0
+  thisEnd >>>= 0
+
+  if (this === target) return 0
+
+  var x = thisEnd - thisStart
+  var y = end - start
+  var len = Math.min(x, y)
+
+  var thisCopy = this.slice(thisStart, thisEnd)
+  var targetCopy = target.slice(start, end)
+
+  for (var i = 0; i < len; ++i) {
+    if (thisCopy[i] !== targetCopy[i]) {
+      x = thisCopy[i]
+      y = targetCopy[i]
+      break
+    }
+  }
+
+  if (x < y) return -1
+  if (y < x) return 1
+  return 0
+}
+
+// Finds either the first index of `val` in `buffer` at offset >= `byteOffset`,
+// OR the last index of `val` in `buffer` at offset <= `byteOffset`.
+//
+// Arguments:
+// - buffer - a Buffer to search
+// - val - a string, Buffer, or number
+// - byteOffset - an index into `buffer`; will be clamped to an int32
+// - encoding - an optional encoding, relevant is val is a string
+// - dir - true for indexOf, false for lastIndexOf
+function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
+  // Empty buffer means no match
+  if (buffer.length === 0) return -1
+
+  // Normalize byteOffset
+  if (typeof byteOffset === 'string') {
+    encoding = byteOffset
+    byteOffset = 0
+  } else if (byteOffset > 0x7fffffff) {
+    byteOffset = 0x7fffffff
+  } else if (byteOffset < -0x80000000) {
+    byteOffset = -0x80000000
+  }
+  byteOffset = +byteOffset // Coerce to Number.
+  if (numberIsNaN(byteOffset)) {
+    // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
+    byteOffset = dir ? 0 : (buffer.length - 1)
+  }
+
+  // Normalize byteOffset: negative offsets start from the end of the buffer
+  if (byteOffset < 0) byteOffset = buffer.length + byteOffset
+  if (byteOffset >= buffer.length) {
+    if (dir) return -1
+    else byteOffset = buffer.length - 1
+  } else if (byteOffset < 0) {
+    if (dir) byteOffset = 0
+    else return -1
+  }
+
+  // Normalize val
+  if (typeof val === 'string') {
+    val = Buffer.from(val, encoding)
+  }
+
+  // Finally, search either indexOf (if dir is true) or lastIndexOf
+  if (Buffer.isBuffer(val)) {
+    // Special case: looking for empty string/buffer always fails
+    if (val.length === 0) {
+      return -1
+    }
+    return arrayIndexOf(buffer, val, byteOffset, encoding, dir)
+  } else if (typeof val === 'number') {
+    val = val & 0xFF // Search for a byte value [0-255]
+    if (typeof Uint8Array.prototype.indexOf === 'function') {
+      if (dir) {
+        return Uint8Array.prototype.indexOf.call(buffer, val, byteOffset)
+      } else {
+        return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
+      }
+    }
+    return arrayIndexOf(buffer, [val], byteOffset, encoding, dir)
+  }
+
+  throw new TypeError('val must be string, number or Buffer')
+}
+
+function arrayIndexOf (arr, val, byteOffset, encoding, dir) {
+  var indexSize = 1
+  var arrLength = arr.length
+  var valLength = val.length
+
+  if (encoding !== undefined) {
+    encoding = String(encoding).toLowerCase()
+    if (encoding === 'ucs2' || encoding === 'ucs-2' ||
+        encoding === 'utf16le' || encoding === 'utf-16le') {
+      if (arr.length < 2 || val.length < 2) {
+        return -1
+      }
+      indexSize = 2
+      arrLength /= 2
+      valLength /= 2
+      byteOffset /= 2
+    }
+  }
+
+  function read (buf, i) {
+    if (indexSize === 1) {
+      return buf[i]
+    } else {
+      return buf.readUInt16BE(i * indexSize)
+    }
+  }
+
+  var i
+  if (dir) {
+    var foundIndex = -1
+    for (i = byteOffset; i < arrLength; i++) {
+      if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
+        if (foundIndex === -1) foundIndex = i
+        if (i - foundIndex + 1 === valLength) return foundIndex * indexSize
+      } else {
+        if (foundIndex !== -1) i -= i - foundIndex
+        foundIndex = -1
+      }
+    }
+  } else {
+    if (byteOffset + valLength > arrLength) byteOffset = arrLength - valLength
+    for (i = byteOffset; i >= 0; i--) {
+      var found = true
+      for (var j = 0; j < valLength; j++) {
+        if (read(arr, i + j) !== read(val, j)) {
+          found = false
+          break
+        }
+      }
+      if (found) return i
+    }
+  }
+
+  return -1
+}
+
+Buffer.prototype.includes = function includes (val, byteOffset, encoding) {
+  return this.indexOf(val, byteOffset, encoding) !== -1
+}
+
+Buffer.prototype.indexOf = function indexOf (val, byteOffset, encoding) {
+  return bidirectionalIndexOf(this, val, byteOffset, encoding, true)
+}
+
+Buffer.prototype.lastIndexOf = function lastIndexOf (val, byteOffset, encoding) {
+  return bidirectionalIndexOf(this, val, byteOffset, encoding, false)
+}
+
+function hexWrite (buf, string, offset, length) {
+  offset = Number(offset) || 0
+  var remaining = buf.length - offset
+  if (!length) {
+    length = remaining
+  } else {
+    length = Number(length)
+    if (length > remaining) {
+      length = remaining
+    }
+  }
+
+  var strLen = string.length
+
+  if (length > strLen / 2) {
+    length = strLen / 2
+  }
+  for (var i = 0; i < length; ++i) {
+    var parsed = parseInt(string.substr(i * 2, 2), 16)
+    if (numberIsNaN(parsed)) return i
+    buf[offset + i] = parsed
+  }
+  return i
+}
+
+function utf8Write (buf, string, offset, length) {
+  return blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
+}
+
+function asciiWrite (buf, string, offset, length) {
+  return blitBuffer(asciiToBytes(string), buf, offset, length)
+}
+
+function base64Write (buf, string, offset, length) {
+  return blitBuffer(base64ToBytes(string), buf, offset, length)
+}
+
+function ucs2Write (buf, string, offset, length) {
+  return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length)
+}
+
+Buffer.prototype.write = function write (string, offset, length, encoding) {
+  // Buffer#write(string)
+  if (offset === undefined) {
+    encoding = 'utf8'
+    length = this.length
+    offset = 0
+  // Buffer#write(string, encoding)
+  } else if (length === undefined && typeof offset === 'string') {
+    encoding = offset
+    length = this.length
+    offset = 0
+  // Buffer#write(string, offset[, length][, encoding])
+  } else if (isFinite(offset)) {
+    offset = offset >>> 0
+    if (isFinite(length)) {
+      length = length >>> 0
+      if (encoding === undefined) encoding = 'utf8'
+    } else {
+      encoding = length
+      length = undefined
+    }
+  } else {
+    throw new Error(
+      'Buffer.write(string, encoding, offset[, length]) is no longer supported'
+    )
+  }
+
+  var remaining = this.length - offset
+  if (length === undefined || length > remaining) length = remaining
+
+  if ((string.length > 0 && (length < 0 || offset < 0)) || offset > this.length) {
+    throw new RangeError('Attempt to write outside buffer bounds')
+  }
+
+  if (!encoding) encoding = 'utf8'
+
+  var loweredCase = false
+  for (;;) {
+    switch (encoding) {
+      case 'hex':
+        return hexWrite(this, string, offset, length)
+
+      case 'utf8':
+      case 'utf-8':
+        return utf8Write(this, string, offset, length)
+
+      case 'ascii':
+      case 'latin1':
+      case 'binary':
+        return asciiWrite(this, string, offset, length)
+
+      case 'base64':
+        // Warning: maxLength not taken into account in base64Write
+        return base64Write(this, string, offset, length)
+
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return ucs2Write(this, string, offset, length)
+
+      default:
+        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
+        encoding = ('' + encoding).toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+
+Buffer.prototype.toJSON = function toJSON () {
+  return {
+    type: 'Buffer',
+    data: Array.prototype.slice.call(this._arr || this, 0)
+  }
+}
+
+function base64Slice (buf, start, end) {
+  if (start === 0 && end === buf.length) {
+    return base64.fromByteArray(buf)
+  } else {
+    return base64.fromByteArray(buf.slice(start, end))
+  }
+}
+
+function utf8Slice (buf, start, end) {
+  end = Math.min(buf.length, end)
+  var res = []
+
+  var i = start
+  while (i < end) {
+    var firstByte = buf[i]
+    var codePoint = null
+    var bytesPerSequence = (firstByte > 0xEF)
+      ? 4
+      : (firstByte > 0xDF)
+          ? 3
+          : (firstByte > 0xBF)
+              ? 2
+              : 1
+
+    if (i + bytesPerSequence <= end) {
+      var secondByte, thirdByte, fourthByte, tempCodePoint
+
+      switch (bytesPerSequence) {
+        case 1:
+          if (firstByte < 0x80) {
+            codePoint = firstByte
+          }
+          break
+        case 2:
+          secondByte = buf[i + 1]
+          if ((secondByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
+            if (tempCodePoint > 0x7F) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 3:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
+            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 4:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          fourthByte = buf[i + 3]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
+            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
+              codePoint = tempCodePoint
+            }
+          }
+      }
+    }
+
+    if (codePoint === null) {
+      // we did not generate a valid codePoint so insert a
+      // replacement char (U+FFFD) and advance only 1 byte
+      codePoint = 0xFFFD
+      bytesPerSequence = 1
+    } else if (codePoint > 0xFFFF) {
+      // encode to utf16 (surrogate pair dance)
+      codePoint -= 0x10000
+      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
+      codePoint = 0xDC00 | codePoint & 0x3FF
+    }
+
+    res.push(codePoint)
+    i += bytesPerSequence
+  }
+
+  return decodeCodePointsArray(res)
+}
+
+// Based on http://stackoverflow.com/a/22747272/680742, the browser with
+// the lowest limit is Chrome, with 0x10000 args.
+// We go 1 magnitude less, for safety
+var MAX_ARGUMENTS_LENGTH = 0x1000
+
+function decodeCodePointsArray (codePoints) {
+  var len = codePoints.length
+  if (len <= MAX_ARGUMENTS_LENGTH) {
+    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
+  }
+
+  // Decode in chunks to avoid "call stack size exceeded".
+  var res = ''
+  var i = 0
+  while (i < len) {
+    res += String.fromCharCode.apply(
+      String,
+      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
+    )
+  }
+  return res
+}
+
+function asciiSlice (buf, start, end) {
+  var ret = ''
+  end = Math.min(buf.length, end)
+
+  for (var i = start; i < end; ++i) {
+    ret += String.fromCharCode(buf[i] & 0x7F)
+  }
+  return ret
+}
+
+function latin1Slice (buf, start, end) {
+  var ret = ''
+  end = Math.min(buf.length, end)
+
+  for (var i = start; i < end; ++i) {
+    ret += String.fromCharCode(buf[i])
+  }
+  return ret
+}
+
+function hexSlice (buf, start, end) {
+  var len = buf.length
+
+  if (!start || start < 0) start = 0
+  if (!end || end < 0 || end > len) end = len
+
+  var out = ''
+  for (var i = start; i < end; ++i) {
+    out += hexSliceLookupTable[buf[i]]
+  }
+  return out
+}
+
+function utf16leSlice (buf, start, end) {
+  var bytes = buf.slice(start, end)
+  var res = ''
+  // If bytes.length is odd, the last 8 bits must be ignored (same as node.js)
+  for (var i = 0; i < bytes.length - 1; i += 2) {
+    res += String.fromCharCode(bytes[i] + (bytes[i + 1] * 256))
+  }
+  return res
+}
+
+Buffer.prototype.slice = function slice (start, end) {
+  var len = this.length
+  start = ~~start
+  end = end === undefined ? len : ~~end
+
+  if (start < 0) {
+    start += len
+    if (start < 0) start = 0
+  } else if (start > len) {
+    start = len
+  }
+
+  if (end < 0) {
+    end += len
+    if (end < 0) end = 0
+  } else if (end > len) {
+    end = len
+  }
+
+  if (end < start) end = start
+
+  var newBuf = this.subarray(start, end)
+  // Return an augmented `Uint8Array` instance
+  Object.setPrototypeOf(newBuf, Buffer.prototype)
+
+  return newBuf
+}
+
+/*
+ * Need to make sure that buffer isn't trying to write out of bounds.
+ */
+function checkOffset (offset, ext, length) {
+  if ((offset % 1) !== 0 || offset < 0) throw new RangeError('offset is not uint')
+  if (offset + ext > length) throw new RangeError('Trying to access beyond buffer length')
+}
+
+Buffer.prototype.readUintLE =
+Buffer.prototype.readUIntLE = function readUIntLE (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset]
+  var mul = 1
+  var i = 0
+  while (++i < byteLength && (mul *= 0x100)) {
+    val += this[offset + i] * mul
+  }
+
+  return val
+}
+
+Buffer.prototype.readUintBE =
+Buffer.prototype.readUIntBE = function readUIntBE (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) {
+    checkOffset(offset, byteLength, this.length)
+  }
+
+  var val = this[offset + --byteLength]
+  var mul = 1
+  while (byteLength > 0 && (mul *= 0x100)) {
+    val += this[offset + --byteLength] * mul
+  }
+
+  return val
+}
+
+Buffer.prototype.readUint8 =
+Buffer.prototype.readUInt8 = function readUInt8 (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 1, this.length)
+  return this[offset]
+}
+
+Buffer.prototype.readUint16LE =
+Buffer.prototype.readUInt16LE = function readUInt16LE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  return this[offset] | (this[offset + 1] << 8)
+}
+
+Buffer.prototype.readUint16BE =
+Buffer.prototype.readUInt16BE = function readUInt16BE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  return (this[offset] << 8) | this[offset + 1]
+}
+
+Buffer.prototype.readUint32LE =
+Buffer.prototype.readUInt32LE = function readUInt32LE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return ((this[offset]) |
+      (this[offset + 1] << 8) |
+      (this[offset + 2] << 16)) +
+      (this[offset + 3] * 0x1000000)
+}
+
+Buffer.prototype.readUint32BE =
+Buffer.prototype.readUInt32BE = function readUInt32BE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return (this[offset] * 0x1000000) +
+    ((this[offset + 1] << 16) |
+    (this[offset + 2] << 8) |
+    this[offset + 3])
+}
+
+Buffer.prototype.readIntLE = function readIntLE (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset]
+  var mul = 1
+  var i = 0
+  while (++i < byteLength && (mul *= 0x100)) {
+    val += this[offset + i] * mul
+  }
+  mul *= 0x80
+
+  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
+
+  return val
+}
+
+Buffer.prototype.readIntBE = function readIntBE (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+  var i = byteLength
+  var mul = 1
+  var val = this[offset + --i]
+  while (i > 0 && (mul *= 0x100)) {
+    val += this[offset + --i] * mul
+  }
+  mul *= 0x80
+
+  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
+
+  return val
+}
+
+Buffer.prototype.readInt8 = function readInt8 (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 1, this.length)
+  if (!(this[offset] & 0x80)) return (this[offset])
+  return ((0xff - this[offset] + 1) * -1)
+}
+
+Buffer.prototype.readInt16LE = function readInt16LE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  var val = this[offset] | (this[offset + 1] << 8)
+  return (val & 0x8000) ? val | 0xFFFF0000 : val
+}
+
+Buffer.prototype.readInt16BE = function readInt16BE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  var val = this[offset + 1] | (this[offset] << 8)
+  return (val & 0x8000) ? val | 0xFFFF0000 : val
+}
+
+Buffer.prototype.readInt32LE = function readInt32LE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return (this[offset]) |
+    (this[offset + 1] << 8) |
+    (this[offset + 2] << 16) |
+    (this[offset + 3] << 24)
+}
+
+Buffer.prototype.readInt32BE = function readInt32BE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return (this[offset] << 24) |
+    (this[offset + 1] << 16) |
+    (this[offset + 2] << 8) |
+    (this[offset + 3])
+}
+
+Buffer.prototype.readFloatLE = function readFloatLE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+  return ieee754.read(this, offset, true, 23, 4)
+}
+
+Buffer.prototype.readFloatBE = function readFloatBE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+  return ieee754.read(this, offset, false, 23, 4)
+}
+
+Buffer.prototype.readDoubleLE = function readDoubleLE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 8, this.length)
+  return ieee754.read(this, offset, true, 52, 8)
+}
+
+Buffer.prototype.readDoubleBE = function readDoubleBE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 8, this.length)
+  return ieee754.read(this, offset, false, 52, 8)
+}
+
+function checkInt (buf, value, offset, ext, max, min) {
+  if (!Buffer.isBuffer(buf)) throw new TypeError('"buffer" argument must be a Buffer instance')
+  if (value > max || value < min) throw new RangeError('"value" argument is out of bounds')
+  if (offset + ext > buf.length) throw new RangeError('Index out of range')
+}
+
+Buffer.prototype.writeUintLE =
+Buffer.prototype.writeUIntLE = function writeUIntLE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) {
+    var maxBytes = Math.pow(2, 8 * byteLength) - 1
+    checkInt(this, value, offset, byteLength, maxBytes, 0)
+  }
+
+  var mul = 1
+  var i = 0
+  this[offset] = value & 0xFF
+  while (++i < byteLength && (mul *= 0x100)) {
+    this[offset + i] = (value / mul) & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeUintBE =
+Buffer.prototype.writeUIntBE = function writeUIntBE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) {
+    var maxBytes = Math.pow(2, 8 * byteLength) - 1
+    checkInt(this, value, offset, byteLength, maxBytes, 0)
+  }
+
+  var i = byteLength - 1
+  var mul = 1
+  this[offset + i] = value & 0xFF
+  while (--i >= 0 && (mul *= 0x100)) {
+    this[offset + i] = (value / mul) & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeUint8 =
+Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
+  this[offset] = (value & 0xff)
+  return offset + 1
+}
+
+Buffer.prototype.writeUint16LE =
+Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
+  this[offset] = (value & 0xff)
+  this[offset + 1] = (value >>> 8)
+  return offset + 2
+}
+
+Buffer.prototype.writeUint16BE =
+Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
+  this[offset] = (value >>> 8)
+  this[offset + 1] = (value & 0xff)
+  return offset + 2
+}
+
+Buffer.prototype.writeUint32LE =
+Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
+  this[offset + 3] = (value >>> 24)
+  this[offset + 2] = (value >>> 16)
+  this[offset + 1] = (value >>> 8)
+  this[offset] = (value & 0xff)
+  return offset + 4
+}
+
+Buffer.prototype.writeUint32BE =
+Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
+  this[offset] = (value >>> 24)
+  this[offset + 1] = (value >>> 16)
+  this[offset + 2] = (value >>> 8)
+  this[offset + 3] = (value & 0xff)
+  return offset + 4
+}
+
+Buffer.prototype.writeIntLE = function writeIntLE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    var limit = Math.pow(2, (8 * byteLength) - 1)
+
+    checkInt(this, value, offset, byteLength, limit - 1, -limit)
+  }
+
+  var i = 0
+  var mul = 1
+  var sub = 0
+  this[offset] = value & 0xFF
+  while (++i < byteLength && (mul *= 0x100)) {
+    if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
+      sub = 1
+    }
+    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeIntBE = function writeIntBE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    var limit = Math.pow(2, (8 * byteLength) - 1)
+
+    checkInt(this, value, offset, byteLength, limit - 1, -limit)
+  }
+
+  var i = byteLength - 1
+  var mul = 1
+  var sub = 0
+  this[offset + i] = value & 0xFF
+  while (--i >= 0 && (mul *= 0x100)) {
+    if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
+      sub = 1
+    }
+    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeInt8 = function writeInt8 (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
+  if (value < 0) value = 0xff + value + 1
+  this[offset] = (value & 0xff)
+  return offset + 1
+}
+
+Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
+  this[offset] = (value & 0xff)
+  this[offset + 1] = (value >>> 8)
+  return offset + 2
+}
+
+Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
+  this[offset] = (value >>> 8)
+  this[offset + 1] = (value & 0xff)
+  return offset + 2
+}
+
+Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
+  this[offset] = (value & 0xff)
+  this[offset + 1] = (value >>> 8)
+  this[offset + 2] = (value >>> 16)
+  this[offset + 3] = (value >>> 24)
+  return offset + 4
+}
+
+Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
+  if (value < 0) value = 0xffffffff + value + 1
+  this[offset] = (value >>> 24)
+  this[offset + 1] = (value >>> 16)
+  this[offset + 2] = (value >>> 8)
+  this[offset + 3] = (value & 0xff)
+  return offset + 4
+}
+
+function checkIEEE754 (buf, value, offset, ext, max, min) {
+  if (offset + ext > buf.length) throw new RangeError('Index out of range')
+  if (offset < 0) throw new RangeError('Index out of range')
+}
+
+function writeFloat (buf, value, offset, littleEndian, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    checkIEEE754(buf, value, offset, 4, 3.4028234663852886e+38, -3.4028234663852886e+38)
+  }
+  ieee754.write(buf, value, offset, littleEndian, 23, 4)
+  return offset + 4
+}
+
+Buffer.prototype.writeFloatLE = function writeFloatLE (value, offset, noAssert) {
+  return writeFloat(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeFloatBE = function writeFloatBE (value, offset, noAssert) {
+  return writeFloat(this, value, offset, false, noAssert)
+}
+
+function writeDouble (buf, value, offset, littleEndian, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    checkIEEE754(buf, value, offset, 8, 1.7976931348623157E+308, -1.7976931348623157E+308)
+  }
+  ieee754.write(buf, value, offset, littleEndian, 52, 8)
+  return offset + 8
+}
+
+Buffer.prototype.writeDoubleLE = function writeDoubleLE (value, offset, noAssert) {
+  return writeDouble(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeDoubleBE = function writeDoubleBE (value, offset, noAssert) {
+  return writeDouble(this, value, offset, false, noAssert)
+}
+
+// copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
+Buffer.prototype.copy = function copy (target, targetStart, start, end) {
+  if (!Buffer.isBuffer(target)) throw new TypeError('argument should be a Buffer')
+  if (!start) start = 0
+  if (!end && end !== 0) end = this.length
+  if (targetStart >= target.length) targetStart = target.length
+  if (!targetStart) targetStart = 0
+  if (end > 0 && end < start) end = start
+
+  // Copy 0 bytes; we're done
+  if (end === start) return 0
+  if (target.length === 0 || this.length === 0) return 0
+
+  // Fatal error conditions
+  if (targetStart < 0) {
+    throw new RangeError('targetStart out of bounds')
+  }
+  if (start < 0 || start >= this.length) throw new RangeError('Index out of range')
+  if (end < 0) throw new RangeError('sourceEnd out of bounds')
+
+  // Are we oob?
+  if (end > this.length) end = this.length
+  if (target.length - targetStart < end - start) {
+    end = target.length - targetStart + start
+  }
+
+  var len = end - start
+
+  if (this === target && typeof Uint8Array.prototype.copyWithin === 'function') {
+    // Use built-in when available, missing from IE11
+    this.copyWithin(targetStart, start, end)
+  } else {
+    Uint8Array.prototype.set.call(
+      target,
+      this.subarray(start, end),
+      targetStart
+    )
+  }
+
+  return len
+}
+
+// Usage:
+//    buffer.fill(number[, offset[, end]])
+//    buffer.fill(buffer[, offset[, end]])
+//    buffer.fill(string[, offset[, end]][, encoding])
+Buffer.prototype.fill = function fill (val, start, end, encoding) {
+  // Handle string cases:
+  if (typeof val === 'string') {
+    if (typeof start === 'string') {
+      encoding = start
+      start = 0
+      end = this.length
+    } else if (typeof end === 'string') {
+      encoding = end
+      end = this.length
+    }
+    if (encoding !== undefined && typeof encoding !== 'string') {
+      throw new TypeError('encoding must be a string')
+    }
+    if (typeof encoding === 'string' && !Buffer.isEncoding(encoding)) {
+      throw new TypeError('Unknown encoding: ' + encoding)
+    }
+    if (val.length === 1) {
+      var code = val.charCodeAt(0)
+      if ((encoding === 'utf8' && code < 128) ||
+          encoding === 'latin1') {
+        // Fast path: If `val` fits into a single byte, use that numeric value.
+        val = code
+      }
+    }
+  } else if (typeof val === 'number') {
+    val = val & 255
+  } else if (typeof val === 'boolean') {
+    val = Number(val)
+  }
+
+  // Invalid ranges are not set to a default, so can range check early.
+  if (start < 0 || this.length < start || this.length < end) {
+    throw new RangeError('Out of range index')
+  }
+
+  if (end <= start) {
+    return this
+  }
+
+  start = start >>> 0
+  end = end === undefined ? this.length : end >>> 0
+
+  if (!val) val = 0
+
+  var i
+  if (typeof val === 'number') {
+    for (i = start; i < end; ++i) {
+      this[i] = val
+    }
+  } else {
+    var bytes = Buffer.isBuffer(val)
+      ? val
+      : Buffer.from(val, encoding)
+    var len = bytes.length
+    if (len === 0) {
+      throw new TypeError('The value "' + val +
+        '" is invalid for argument "value"')
+    }
+    for (i = 0; i < end - start; ++i) {
+      this[i + start] = bytes[i % len]
+    }
+  }
+
+  return this
+}
+
+// HELPER FUNCTIONS
+// ================
+
+var INVALID_BASE64_RE = /[^+/0-9A-Za-z-_]/g
+
+function base64clean (str) {
+  // Node takes equal signs as end of the Base64 encoding
+  str = str.split('=')[0]
+  // Node strips out invalid characters like \n and \t from the string, base64-js does not
+  str = str.trim().replace(INVALID_BASE64_RE, '')
+  // Node converts strings with length < 2 to ''
+  if (str.length < 2) return ''
+  // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
+  while (str.length % 4 !== 0) {
+    str = str + '='
+  }
+  return str
+}
+
+function utf8ToBytes (string, units) {
+  units = units || Infinity
+  var codePoint
+  var length = string.length
+  var leadSurrogate = null
+  var bytes = []
+
+  for (var i = 0; i < length; ++i) {
+    codePoint = string.charCodeAt(i)
+
+    // is surrogate component
+    if (codePoint > 0xD7FF && codePoint < 0xE000) {
+      // last char was a lead
+      if (!leadSurrogate) {
+        // no lead yet
+        if (codePoint > 0xDBFF) {
+          // unexpected trail
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          continue
+        } else if (i + 1 === length) {
+          // unpaired lead
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          continue
+        }
+
+        // valid lead
+        leadSurrogate = codePoint
+
+        continue
+      }
+
+      // 2 leads in a row
+      if (codePoint < 0xDC00) {
+        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+        leadSurrogate = codePoint
+        continue
+      }
+
+      // valid surrogate pair
+      codePoint = (leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00) + 0x10000
+    } else if (leadSurrogate) {
+      // valid bmp char, but last char was a lead
+      if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+    }
+
+    leadSurrogate = null
+
+    // encode utf8
+    if (codePoint < 0x80) {
+      if ((units -= 1) < 0) break
+      bytes.push(codePoint)
+    } else if (codePoint < 0x800) {
+      if ((units -= 2) < 0) break
+      bytes.push(
+        codePoint >> 0x6 | 0xC0,
+        codePoint & 0x3F | 0x80
+      )
+    } else if (codePoint < 0x10000) {
+      if ((units -= 3) < 0) break
+      bytes.push(
+        codePoint >> 0xC | 0xE0,
+        codePoint >> 0x6 & 0x3F | 0x80,
+        codePoint & 0x3F | 0x80
+      )
+    } else if (codePoint < 0x110000) {
+      if ((units -= 4) < 0) break
+      bytes.push(
+        codePoint >> 0x12 | 0xF0,
+        codePoint >> 0xC & 0x3F | 0x80,
+        codePoint >> 0x6 & 0x3F | 0x80,
+        codePoint & 0x3F | 0x80
+      )
+    } else {
+      throw new Error('Invalid code point')
+    }
+  }
+
+  return bytes
+}
+
+function asciiToBytes (str) {
+  var byteArray = []
+  for (var i = 0; i < str.length; ++i) {
+    // Node's code seems to be doing this and not & 0x7F..
+    byteArray.push(str.charCodeAt(i) & 0xFF)
+  }
+  return byteArray
+}
+
+function utf16leToBytes (str, units) {
+  var c, hi, lo
+  var byteArray = []
+  for (var i = 0; i < str.length; ++i) {
+    if ((units -= 2) < 0) break
+
+    c = str.charCodeAt(i)
+    hi = c >> 8
+    lo = c % 256
+    byteArray.push(lo)
+    byteArray.push(hi)
+  }
+
+  return byteArray
+}
+
+function base64ToBytes (str) {
+  return base64.toByteArray(base64clean(str))
+}
+
+function blitBuffer (src, dst, offset, length) {
+  for (var i = 0; i < length; ++i) {
+    if ((i + offset >= dst.length) || (i >= src.length)) break
+    dst[i + offset] = src[i]
+  }
+  return i
+}
+
+// ArrayBuffer or Uint8Array objects from other contexts (i.e. iframes) do not pass
+// the `instanceof` check but they should be treated as of that type.
+// See: https://github.com/feross/buffer/issues/166
+function isInstance (obj, type) {
+  return obj instanceof type ||
+    (obj != null && obj.constructor != null && obj.constructor.name != null &&
+      obj.constructor.name === type.name)
+}
+function numberIsNaN (obj) {
+  // For IE11 support
+  return obj !== obj // eslint-disable-line no-self-compare
+}
+
+// Create lookup table for `toString('hex')`
+// See: https://github.com/feross/buffer/issues/219
+var hexSliceLookupTable = (function () {
+  var alphabet = '0123456789abcdef'
+  var table = new Array(256)
+  for (var i = 0; i < 16; ++i) {
+    var i16 = i * 16
+    for (var j = 0; j < 16; ++j) {
+      table[i16 + j] = alphabet[i] + alphabet[j]
+    }
+  }
+  return table
+})()
+
+}).call(this)}).call(this,require("buffer").Buffer)
+},{"base64-js":4,"buffer":8,"ieee754":34}],9:[function(require,module,exports){
 (function (Buffer){(function (){
 'use strict';
 
@@ -1957,7 +4444,7 @@ clone.clonePrototype = function(parent) {
 };
 
 }).call(this)}).call(this,require("buffer").Buffer)
-},{"buffer":180}],5:[function(require,module,exports){
+},{"buffer":8}],10:[function(require,module,exports){
 var dsv = require('dsv'),
     sexagesimal = require('sexagesimal');
 
@@ -2144,10 +4631,10 @@ module.exports = {
     toPolygon: toPolygon
 };
 
-},{"dsv":11,"sexagesimal":78}],6:[function(require,module,exports){
+},{"dsv":16,"sexagesimal":90}],11:[function(require,module,exports){
 module.exports.structure = require('./src/structure');
 
-},{"./src/structure":10}],7:[function(require,module,exports){
+},{"./src/structure":15}],12:[function(require,module,exports){
 var fieldSize = require('./fieldsize');
 
 var types = {
@@ -2191,7 +4678,7 @@ function bytesPer(fields) {
     return fields.reduce(function(memo, f) { return memo + f.size; }, 1);
 }
 
-},{"./fieldsize":8}],8:[function(require,module,exports){
+},{"./fieldsize":13}],13:[function(require,module,exports){
 module.exports = {
     // string
     C: 254,
@@ -2209,7 +4696,7 @@ module.exports = {
     B: 8,
 };
 
-},{}],9:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 module.exports.lpad = function lpad(str, len, char) {
     while (str.length < len) { str = char + str; } return str;
 };
@@ -2225,7 +4712,7 @@ module.exports.writeField = function writeField(view, fieldLength, str, offset) 
     return offset;
 };
 
-},{}],10:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 var fieldSize = require('./fieldsize'),
     lib = require('./lib'),
     fields = require('./fields');
@@ -2322,17 +4809,17 @@ module.exports = function structure(data) {
     return view;
 };
 
-},{"./fields":7,"./fieldsize":8,"./lib":9}],11:[function(require,module,exports){
+},{"./fields":12,"./fieldsize":13,"./lib":14}],16:[function(require,module,exports){
 
 
 module.exports = new Function("dsv.version = \"0.0.3\";\n\ndsv.tsv = dsv(\"\\t\");\ndsv.csv = dsv(\",\");\n\nfunction dsv(delimiter) {\n  var dsv = {},\n      reFormat = new RegExp(\"[\\\"\" + delimiter + \"\\n]\"),\n      delimiterCode = delimiter.charCodeAt(0);\n\n  dsv.parse = function(text, f) {\n    var o;\n    return dsv.parseRows(text, function(row, i) {\n      if (o) return o(row, i - 1);\n      var a = new Function(\"d\", \"return {\" + row.map(function(name, i) {\n        return JSON.stringify(name) + \": d[\" + i + \"]\";\n      }).join(\",\") + \"}\");\n      o = f ? function(row, i) { return f(a(row), i); } : a;\n    });\n  };\n\n  dsv.parseRows = function(text, f) {\n    var EOL = {}, // sentinel value for end-of-line\n        EOF = {}, // sentinel value for end-of-file\n        rows = [], // output rows\n        N = text.length,\n        I = 0, // current character index\n        n = 0, // the current line number\n        t, // the current token\n        eol; // is the current token followed by EOL?\n\n    function token() {\n      if (I >= N) return EOF; // special case: end of file\n      if (eol) return eol = false, EOL; // special case: end of line\n\n      // special case: quotes\n      var j = I;\n      if (text.charCodeAt(j) === 34) {\n        var i = j;\n        while (i++ < N) {\n          if (text.charCodeAt(i) === 34) {\n            if (text.charCodeAt(i + 1) !== 34) break;\n            ++i;\n          }\n        }\n        I = i + 2;\n        var c = text.charCodeAt(i + 1);\n        if (c === 13) {\n          eol = true;\n          if (text.charCodeAt(i + 2) === 10) ++I;\n        } else if (c === 10) {\n          eol = true;\n        }\n        return text.substring(j + 1, i).replace(/\"\"/g, \"\\\"\");\n      }\n\n      // common case: find next delimiter or newline\n      while (I < N) {\n        var c = text.charCodeAt(I++), k = 1;\n        if (c === 10) eol = true; // \\n\n        else if (c === 13) { eol = true; if (text.charCodeAt(I) === 10) ++I, ++k; } // \\r|\\r\\n\n        else if (c !== delimiterCode) continue;\n        return text.substring(j, I - k);\n      }\n\n      // special case: last token before EOF\n      return text.substring(j);\n    }\n\n    while ((t = token()) !== EOF) {\n      var a = [];\n      while (t !== EOL && t !== EOF) {\n        a.push(t);\n        t = token();\n      }\n      if (f && !(a = f(a, n++))) continue;\n      rows.push(a);\n    }\n\n    return rows;\n  };\n\n  dsv.format = function(rows) {\n    if (Array.isArray(rows[0])) return dsv.formatRows(rows); // deprecated; use formatRows\n    var fieldSet = {}, fields = [];\n\n    // Compute unique fields in order of discovery.\n    rows.forEach(function(row) {\n      for (var field in row) {\n        if (!(field in fieldSet)) {\n          fields.push(fieldSet[field] = field);\n        }\n      }\n    });\n\n    return [fields.map(formatValue).join(delimiter)].concat(rows.map(function(row) {\n      return fields.map(function(field) {\n        return formatValue(row[field]);\n      }).join(delimiter);\n    })).join(\"\\n\");\n  };\n\n  dsv.formatRows = function(rows) {\n    return rows.map(formatRow).join(\"\\n\");\n  };\n\n  function formatRow(row) {\n    return row.map(formatValue).join(delimiter);\n  }\n\n  function formatValue(text) {\n    return reFormat.test(text) ? \"\\\"\" + text.replace(/\\\"/g, \"\\\"\\\"\") + \"\\\"\" : text;\n  }\n\n  return dsv;\n}\n" + ";return dsv")();
 
-},{}],12:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 
 
 module.exports = new Function("dsv.version = \"0.0.4\";\n\ndsv.tsv = dsv(\"\\t\");\ndsv.csv = dsv(\",\");\n\nfunction dsv(delimiter) {\n  var dsv = {},\n      reFormat = new RegExp(\"[\\\"\" + delimiter + \"\\n]\"),\n      delimiterCode = delimiter.charCodeAt(0);\n\n  dsv.parse = function(text, f) {\n    var o;\n    return dsv.parseRows(text, function(row, i) {\n      if (o) return o(row, i - 1);\n      var a = new Function(\"d\", \"return {\" + row.map(function(name, i) {\n        return JSON.stringify(name) + \": d[\" + i + \"]\";\n      }).join(\",\") + \"}\");\n      o = f ? function(row, i) { return f(a(row), i); } : a;\n    });\n  };\n\n  dsv.parseRows = function(text, f) {\n    var EOL = {}, // sentinel value for end-of-line\n        EOF = {}, // sentinel value for end-of-file\n        rows = [], // output rows\n        N = text.length,\n        I = 0, // current character index\n        n = 0, // the current line number\n        t, // the current token\n        eol; // is the current token followed by EOL?\n\n    function token() {\n      if (I >= N) return EOF; // special case: end of file\n      if (eol) return eol = false, EOL; // special case: end of line\n\n      // special case: quotes\n      var j = I;\n      if (text.charCodeAt(j) === 34) {\n        var i = j;\n        while (i++ < N) {\n          if (text.charCodeAt(i) === 34) {\n            if (text.charCodeAt(i + 1) !== 34) break;\n            ++i;\n          }\n        }\n        I = i + 2;\n        var c = text.charCodeAt(i + 1);\n        if (c === 13) {\n          eol = true;\n          if (text.charCodeAt(i + 2) === 10) ++I;\n        } else if (c === 10) {\n          eol = true;\n        }\n        return text.slice(j + 1, i).replace(/\"\"/g, \"\\\"\");\n      }\n\n      // common case: find next delimiter or newline\n      while (I < N) {\n        var c = text.charCodeAt(I++), k = 1;\n        if (c === 10) eol = true; // \\n\n        else if (c === 13) { eol = true; if (text.charCodeAt(I) === 10) ++I, ++k; } // \\r|\\r\\n\n        else if (c !== delimiterCode) continue;\n        return text.slice(j, I - k);\n      }\n\n      // special case: last token before EOF\n      return text.slice(j);\n    }\n\n    while ((t = token()) !== EOF) {\n      var a = [];\n      while (t !== EOL && t !== EOF) {\n        a.push(t);\n        t = token();\n      }\n      if (f && (a = f(a, n++)) == null) continue;\n      rows.push(a);\n    }\n\n    return rows;\n  };\n\n  dsv.format = function(rows) {\n    if (Array.isArray(rows[0])) return dsv.formatRows(rows); // deprecated; use formatRows\n    var fieldSet = {}, fields = [];\n\n    // Compute unique fields in order of discovery.\n    rows.forEach(function(row) {\n      for (var field in row) {\n        if (!(field in fieldSet)) {\n          fields.push(fieldSet[field] = field);\n        }\n      }\n    });\n\n    return [fields.map(formatValue).join(delimiter)].concat(rows.map(function(row) {\n      return fields.map(function(field) {\n        return formatValue(row[field]);\n      }).join(delimiter);\n    })).join(\"\\n\");\n  };\n\n  dsv.formatRows = function(rows) {\n    return rows.map(formatRow).join(\"\\n\");\n  };\n\n  function formatRow(row) {\n    return row.map(formatValue).join(delimiter);\n  }\n\n  function formatValue(text) {\n    return reFormat.test(text) ? \"\\\"\" + text.replace(/\\\"/g, \"\\\"\\\"\") + \"\\\"\" : text;\n  }\n\n  return dsv;\n}\n" + ";return dsv")();
 
-},{}],13:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 /*!
  * escape-html
  * Copyright(c) 2012-2013 TJ Holowaychuk
@@ -2412,7 +4899,7 @@ function escapeHtml(string) {
     : html;
 }
 
-},{}],14:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 module.exports = Extent;
 
 function Extent() {
@@ -2475,7 +4962,7 @@ Extent.prototype.polygon = function() {
     };
 };
 
-},{}],15:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 /* FileSaver.js
  *  A saveAs() FileSaver implementation.
  *  2014-05-27
@@ -2718,7 +5205,7 @@ if (typeof module !== "undefined" && module !== null) {
   });
 }
 
-},{}],16:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 var wgs84 = require('wgs84');
 
 module.exports = function(_) {
@@ -2780,7 +5267,7 @@ function rad(_) {
     return _ * Math.PI / 180;
 }
 
-},{"wgs84":127}],17:[function(require,module,exports){
+},{"wgs84":143}],22:[function(require,module,exports){
 var wgs84 = require('wgs84');
 
 module.exports.geometry = geometry;
@@ -2846,7 +5333,7 @@ function rad(_) {
     return _ * Math.PI / 180;
 }
 
-},{"wgs84":127}],18:[function(require,module,exports){
+},{"wgs84":143}],23:[function(require,module,exports){
 module.exports = function flatten(list, depth) {
     return _flatten(list);
 
@@ -2866,7 +5353,7 @@ module.exports = function flatten(list, depth) {
     }
 };
 
-},{}],19:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 var geojsonNormalize = require('geojson-normalize'),
     geojsonFlatten = require('geojson-flatten'),
     flatten = require('./flatten');
@@ -2882,7 +5369,7 @@ module.exports = function(_) {
     return coordinates;
 };
 
-},{"./flatten":18,"geojson-flatten":21,"geojson-normalize":22}],20:[function(require,module,exports){
+},{"./flatten":23,"geojson-flatten":26,"geojson-normalize":27}],25:[function(require,module,exports){
 var geojsonCoords = require('geojson-coords'),
     traverse = require('traverse'),
     extent = require('extent');
@@ -2912,7 +5399,7 @@ function getExtent(_) {
     return ext;
 }
 
-},{"extent":14,"geojson-coords":19,"traverse":125}],21:[function(require,module,exports){
+},{"extent":19,"geojson-coords":24,"traverse":137}],26:[function(require,module,exports){
 module.exports = flatten;
 
 function flatten(gj, up) {
@@ -2953,7 +5440,7 @@ function flatten(gj, up) {
     }
 }
 
-},{}],22:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 module.exports = normalize;
 
 var types = {
@@ -2998,7 +5485,7 @@ function normalize(gj) {
     }
 }
 
-},{}],23:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 module.exports = function(count, type) {
     switch (type) {
         case 'point':
@@ -3017,7 +5504,7 @@ function feature(geom) {
 }
 function collection(f) { return { type: 'FeatureCollection', features: f }; }
 
-},{}],24:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 var geojsonArea = require('geojson-area');
 
 module.exports = rewind;
@@ -3068,7 +5555,7 @@ function cw(_) {
     return geojsonArea.ring(_) >= 0;
 }
 
-},{"geojson-area":17}],25:[function(require,module,exports){
+},{"geojson-area":22}],30:[function(require,module,exports){
 var geojsonArea = require('geojson-area');
 
 module.exports = rewind;
@@ -3119,7 +5606,7 @@ function cw(_) {
     return geojsonArea.ring(_) >= 0;
 }
 
-},{"geojson-area":17}],26:[function(require,module,exports){
+},{"geojson-area":22}],31:[function(require,module,exports){
 var dsv = require('dsv');
 
 module.exports = function(_, delim) {
@@ -3146,7 +5633,7 @@ module.exports = function(_, delim) {
     }));
 };
 
-},{"dsv":11}],27:[function(require,module,exports){
+},{"dsv":16}],32:[function(require,module,exports){
 var jsonlint = require('jsonlint-lines');
 
 function hint(str) {
@@ -3465,7 +5952,7 @@ function hint(str) {
 
 module.exports.hint = hint;
 
-},{"jsonlint-lines":29}],28:[function(require,module,exports){
+},{"jsonlint-lines":38}],33:[function(require,module,exports){
 var parseCSV = require('dsv').csv.parse;
 
 /**
@@ -3507,7 +5994,144 @@ function gtfs2geojson(gtfs) {
 
 module.exports = gtfs2geojson;
 
-},{"dsv":12}],29:[function(require,module,exports){
+},{"dsv":17}],34:[function(require,module,exports){
+/*! ieee754. BSD-3-Clause License. Feross Aboukhadijeh <https://feross.org/opensource> */
+exports.read = function (buffer, offset, isLE, mLen, nBytes) {
+  var e, m
+  var eLen = (nBytes * 8) - mLen - 1
+  var eMax = (1 << eLen) - 1
+  var eBias = eMax >> 1
+  var nBits = -7
+  var i = isLE ? (nBytes - 1) : 0
+  var d = isLE ? -1 : 1
+  var s = buffer[offset + i]
+
+  i += d
+
+  e = s & ((1 << (-nBits)) - 1)
+  s >>= (-nBits)
+  nBits += eLen
+  for (; nBits > 0; e = (e * 256) + buffer[offset + i], i += d, nBits -= 8) {}
+
+  m = e & ((1 << (-nBits)) - 1)
+  e >>= (-nBits)
+  nBits += mLen
+  for (; nBits > 0; m = (m * 256) + buffer[offset + i], i += d, nBits -= 8) {}
+
+  if (e === 0) {
+    e = 1 - eBias
+  } else if (e === eMax) {
+    return m ? NaN : ((s ? -1 : 1) * Infinity)
+  } else {
+    m = m + Math.pow(2, mLen)
+    e = e - eBias
+  }
+  return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
+}
+
+exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
+  var e, m, c
+  var eLen = (nBytes * 8) - mLen - 1
+  var eMax = (1 << eLen) - 1
+  var eBias = eMax >> 1
+  var rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0)
+  var i = isLE ? 0 : (nBytes - 1)
+  var d = isLE ? 1 : -1
+  var s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0
+
+  value = Math.abs(value)
+
+  if (isNaN(value) || value === Infinity) {
+    m = isNaN(value) ? 1 : 0
+    e = eMax
+  } else {
+    e = Math.floor(Math.log(value) / Math.LN2)
+    if (value * (c = Math.pow(2, -e)) < 1) {
+      e--
+      c *= 2
+    }
+    if (e + eBias >= 1) {
+      value += rt / c
+    } else {
+      value += rt * Math.pow(2, 1 - eBias)
+    }
+    if (value * c >= 2) {
+      e++
+      c /= 2
+    }
+
+    if (e + eBias >= eMax) {
+      m = 0
+      e = eMax
+    } else if (e + eBias >= 1) {
+      m = ((value * c) - 1) * Math.pow(2, mLen)
+      e = e + eBias
+    } else {
+      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen)
+      e = 0
+    }
+  }
+
+  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8) {}
+
+  e = (e << mLen) | m
+  eLen += mLen
+  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
+
+  buffer[offset + i - d] |= s * 128
+}
+
+},{}],35:[function(require,module,exports){
+if (typeof Object.create === 'function') {
+  // implementation from standard node.js 'util' module
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    ctor.prototype = Object.create(superCtor.prototype, {
+      constructor: {
+        value: ctor,
+        enumerable: false,
+        writable: true,
+        configurable: true
+      }
+    });
+  };
+} else {
+  // old school shim for old browsers
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    var TempCtor = function () {}
+    TempCtor.prototype = superCtor.prototype
+    ctor.prototype = new TempCtor()
+    ctor.prototype.constructor = ctor
+  }
+}
+
+},{}],36:[function(require,module,exports){
+arguments[4][35][0].apply(exports,arguments)
+},{"dup":35}],37:[function(require,module,exports){
+/*!
+ * Determine if an object is a Buffer
+ *
+ * @author   Feross Aboukhadijeh <https://feross.org>
+ * @license  MIT
+ */
+
+// The _isBuffer check is for Safari 5-7 support, because it's missing
+// Object.prototype.constructor. Remove this eventually
+module.exports = function (obj) {
+  return obj != null && (isBuffer(obj) || isSlowBuffer(obj) || !!obj._isBuffer)
+}
+
+function isBuffer (obj) {
+  return !!obj.constructor && typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
+}
+
+// For Node v0.10 support. Remove this eventually.
+function isSlowBuffer (obj) {
+  return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
+}
+
+},{}],38:[function(require,module,exports){
 (function (process){(function (){
 /* parser generated by jison 0.4.6 */
 /*
@@ -4164,7 +6788,7 @@ if (typeof module !== 'undefined' && require.main === module) {
 }
 }
 }).call(this)}).call(this,require('_process'))
-},{"_process":187,"fs":176,"path":186}],30:[function(require,module,exports){
+},{"_process":88,"fs":7,"path":85}],39:[function(require,module,exports){
 'use strict';
 // private property
 var _keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
@@ -4236,7 +6860,7 @@ exports.decode = function(input, utf8) {
 
 };
 
-},{}],31:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 'use strict';
 function CompressedObject() {
     this.compressedSize = 0;
@@ -4266,7 +6890,7 @@ CompressedObject.prototype = {
 };
 module.exports = CompressedObject;
 
-},{}],32:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 'use strict';
 exports.STORE = {
     magic: "\x00\x00",
@@ -4281,7 +6905,7 @@ exports.STORE = {
 };
 exports.DEFLATE = require('./flate');
 
-},{"./flate":37}],33:[function(require,module,exports){
+},{"./flate":46}],42:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -4385,7 +7009,7 @@ module.exports = function crc32(input, crc) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./utils":50}],34:[function(require,module,exports){
+},{"./utils":59}],43:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -4494,7 +7118,7 @@ DataReader.prototype = {
 };
 module.exports = DataReader;
 
-},{"./utils":50}],35:[function(require,module,exports){
+},{"./utils":59}],44:[function(require,module,exports){
 'use strict';
 exports.base64 = false;
 exports.binary = false;
@@ -4507,7 +7131,7 @@ exports.comment = null;
 exports.unixPermissions = null;
 exports.dosPermissions = null;
 
-},{}],36:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -4614,7 +7238,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./utils":50}],37:[function(require,module,exports){
+},{"./utils":59}],46:[function(require,module,exports){
 'use strict';
 var USE_TYPEDARRAY = (typeof Uint8Array !== 'undefined') && (typeof Uint16Array !== 'undefined') && (typeof Uint32Array !== 'undefined');
 
@@ -4632,7 +7256,7 @@ exports.uncompress =  function(input) {
     return pako.inflateRaw(input);
 };
 
-},{"pako":59}],38:[function(require,module,exports){
+},{"pako":69}],47:[function(require,module,exports){
 'use strict';
 
 var base64 = require('./base64');
@@ -4713,7 +7337,7 @@ JSZip.base64 = {
 JSZip.compressions = require('./compressions');
 module.exports = JSZip;
 
-},{"./base64":30,"./compressions":32,"./defaults":35,"./deprecatedPublicUtils":36,"./load":39,"./object":42,"./support":46}],39:[function(require,module,exports){
+},{"./base64":39,"./compressions":41,"./defaults":44,"./deprecatedPublicUtils":45,"./load":48,"./object":51,"./support":55}],48:[function(require,module,exports){
 'use strict';
 var base64 = require('./base64');
 var ZipEntries = require('./zipEntries');
@@ -4746,7 +7370,7 @@ module.exports = function(data, options) {
     return this;
 };
 
-},{"./base64":30,"./zipEntries":51}],40:[function(require,module,exports){
+},{"./base64":39,"./zipEntries":60}],49:[function(require,module,exports){
 (function (Buffer){(function (){
 'use strict';
 module.exports = function(data, encoding){
@@ -4757,7 +7381,7 @@ module.exports.test = function(b){
 };
 
 }).call(this)}).call(this,require("buffer").Buffer)
-},{"buffer":180}],41:[function(require,module,exports){
+},{"buffer":8}],50:[function(require,module,exports){
 'use strict';
 var Uint8ArrayReader = require('./uint8ArrayReader');
 
@@ -4779,7 +7403,7 @@ NodeBufferReader.prototype.readData = function(size) {
 };
 module.exports = NodeBufferReader;
 
-},{"./uint8ArrayReader":47}],42:[function(require,module,exports){
+},{"./uint8ArrayReader":56}],51:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var utils = require('./utils');
@@ -5664,7 +8288,7 @@ var out = {
 };
 module.exports = out;
 
-},{"./base64":30,"./compressedObject":31,"./compressions":32,"./crc32":33,"./defaults":35,"./nodeBuffer":40,"./signature":43,"./stringWriter":45,"./support":46,"./uint8ArrayWriter":48,"./utf8":49,"./utils":50}],43:[function(require,module,exports){
+},{"./base64":39,"./compressedObject":40,"./compressions":41,"./crc32":42,"./defaults":44,"./nodeBuffer":49,"./signature":52,"./stringWriter":54,"./support":55,"./uint8ArrayWriter":57,"./utf8":58,"./utils":59}],52:[function(require,module,exports){
 'use strict';
 exports.LOCAL_FILE_HEADER = "PK\x03\x04";
 exports.CENTRAL_FILE_HEADER = "PK\x01\x02";
@@ -5673,7 +8297,7 @@ exports.ZIP64_CENTRAL_DIRECTORY_LOCATOR = "PK\x06\x07";
 exports.ZIP64_CENTRAL_DIRECTORY_END = "PK\x06\x06";
 exports.DATA_DESCRIPTOR = "PK\x07\x08";
 
-},{}],44:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 var utils = require('./utils');
@@ -5711,7 +8335,7 @@ StringReader.prototype.readData = function(size) {
 };
 module.exports = StringReader;
 
-},{"./dataReader":34,"./utils":50}],45:[function(require,module,exports){
+},{"./dataReader":43,"./utils":59}],54:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -5743,7 +8367,7 @@ StringWriter.prototype = {
 
 module.exports = StringWriter;
 
-},{"./utils":50}],46:[function(require,module,exports){
+},{"./utils":59}],55:[function(require,module,exports){
 (function (Buffer){(function (){
 'use strict';
 exports.base64 = true;
@@ -5781,7 +8405,7 @@ else {
 }
 
 }).call(this)}).call(this,require("buffer").Buffer)
-},{"buffer":180}],47:[function(require,module,exports){
+},{"buffer":8}],56:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 
@@ -5830,7 +8454,7 @@ Uint8ArrayReader.prototype.readData = function(size) {
 };
 module.exports = Uint8ArrayReader;
 
-},{"./dataReader":34}],48:[function(require,module,exports){
+},{"./dataReader":43}],57:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -5868,7 +8492,7 @@ Uint8ArrayWriter.prototype = {
 
 module.exports = Uint8ArrayWriter;
 
-},{"./utils":50}],49:[function(require,module,exports){
+},{"./utils":59}],58:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -6077,7 +8701,7 @@ exports.utf8decode = function utf8decode(buf) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./nodeBuffer":40,"./support":46,"./utils":50}],50:[function(require,module,exports){
+},{"./nodeBuffer":49,"./support":55,"./utils":59}],59:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var compressions = require('./compressions');
@@ -6405,7 +9029,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./compressions":32,"./nodeBuffer":40,"./support":46}],51:[function(require,module,exports){
+},{"./compressions":41,"./nodeBuffer":49,"./support":55}],60:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var NodeBufferReader = require('./nodeBufferReader');
@@ -6628,7 +9252,7 @@ ZipEntries.prototype = {
 // }}} end of ZipEntries
 module.exports = ZipEntries;
 
-},{"./nodeBufferReader":41,"./object":42,"./signature":43,"./stringReader":44,"./support":46,"./uint8ArrayReader":47,"./utils":50,"./zipEntry":52}],52:[function(require,module,exports){
+},{"./nodeBufferReader":50,"./object":51,"./signature":52,"./stringReader":53,"./support":55,"./uint8ArrayReader":56,"./utils":59,"./zipEntry":61}],61:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var utils = require('./utils');
@@ -6940,7 +9564,7 @@ ZipEntry.prototype = {
 };
 module.exports = ZipEntry;
 
-},{"./compressedObject":31,"./object":42,"./stringReader":44,"./utils":50}],53:[function(require,module,exports){
+},{"./compressedObject":40,"./object":51,"./stringReader":53,"./utils":59}],62:[function(require,module,exports){
 var spherical = require('spherical'),
     geojsonArea = require('geojson-area');
 
@@ -6985,7 +9609,7 @@ module.exports.area = function(layer) {
     return geojsonArea(gj.geometry);
 };
 
-},{"geojson-area":16,"spherical":90}],54:[function(require,module,exports){
+},{"geojson-area":21,"spherical":102}],63:[function(require,module,exports){
 (function(window) {
 	var HAS_HASHCHANGE = (function() {
 		var doc_mode = window.documentMode;
@@ -7149,7 +9773,7 @@ module.exports.area = function(layer) {
 	};
 })(window);
 
-},{}],55:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 (function (global){(function (){
 /**
  * marked - a markdown parser
@@ -8419,7 +11043,99 @@ if (typeof exports === 'object') {
 }());
 
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],56:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
+/*
+object-assign
+(c) Sindre Sorhus
+@license MIT
+*/
+
+'use strict';
+/* eslint-disable no-unused-vars */
+var getOwnPropertySymbols = Object.getOwnPropertySymbols;
+var hasOwnProperty = Object.prototype.hasOwnProperty;
+var propIsEnumerable = Object.prototype.propertyIsEnumerable;
+
+function toObject(val) {
+	if (val === null || val === undefined) {
+		throw new TypeError('Object.assign cannot be called with null or undefined');
+	}
+
+	return Object(val);
+}
+
+function shouldUseNative() {
+	try {
+		if (!Object.assign) {
+			return false;
+		}
+
+		// Detect buggy property enumeration order in older V8 versions.
+
+		// https://bugs.chromium.org/p/v8/issues/detail?id=4118
+		var test1 = new String('abc');  // eslint-disable-line no-new-wrappers
+		test1[5] = 'de';
+		if (Object.getOwnPropertyNames(test1)[0] === '5') {
+			return false;
+		}
+
+		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
+		var test2 = {};
+		for (var i = 0; i < 10; i++) {
+			test2['_' + String.fromCharCode(i)] = i;
+		}
+		var order2 = Object.getOwnPropertyNames(test2).map(function (n) {
+			return test2[n];
+		});
+		if (order2.join('') !== '0123456789') {
+			return false;
+		}
+
+		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
+		var test3 = {};
+		'abcdefghijklmnopqrst'.split('').forEach(function (letter) {
+			test3[letter] = letter;
+		});
+		if (Object.keys(Object.assign({}, test3)).join('') !==
+				'abcdefghijklmnopqrst') {
+			return false;
+		}
+
+		return true;
+	} catch (err) {
+		// We don't expect any of the above to throw, but better to be safe.
+		return false;
+	}
+}
+
+module.exports = shouldUseNative() ? Object.assign : function (target, source) {
+	var from;
+	var to = toObject(target);
+	var symbols;
+
+	for (var s = 1; s < arguments.length; s++) {
+		from = Object(arguments[s]);
+
+		for (var key in from) {
+			if (hasOwnProperty.call(from, key)) {
+				to[key] = from[key];
+			}
+		}
+
+		if (getOwnPropertySymbols) {
+			symbols = getOwnPropertySymbols(from);
+			for (var i = 0; i < symbols.length; i++) {
+				if (propIsEnumerable.call(from, symbols[i])) {
+					to[symbols[i]] = from[symbols[i]];
+				}
+			}
+		}
+	}
+
+	return to;
+};
+
+},{}],66:[function(require,module,exports){
 var _ = require("./lodash.custom.js");
 var rewind = require("geojson-rewind");
 
@@ -9015,7 +11731,7 @@ osmtogeojson.toGeojson = osmtogeojson;
 
 module.exports = osmtogeojson;
 
-},{"./lodash.custom.js":57,"./polygon_features.json":58,"geojson-rewind":24}],57:[function(require,module,exports){
+},{"./lodash.custom.js":67,"./polygon_features.json":68,"geojson-rewind":29}],67:[function(require,module,exports){
 (function (global){(function (){
 /**
  * @license
@@ -10813,7 +13529,7 @@ module.exports = osmtogeojson;
 }.call(this));
 
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],58:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 module.exports={
     "building": true,
     "highway": {
@@ -10894,7 +13610,7 @@ module.exports={
     "area:highway": true,
     "craft": true
 }
-},{}],59:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 // Top level file is just a mixin of submodules & constants
 'use strict';
 
@@ -10910,7 +13626,7 @@ assign(pako, deflate, inflate, constants);
 
 module.exports = pako;
 
-},{"./lib/deflate":60,"./lib/inflate":61,"./lib/utils/common":62,"./lib/zlib/constants":65}],60:[function(require,module,exports){
+},{"./lib/deflate":70,"./lib/inflate":71,"./lib/utils/common":72,"./lib/zlib/constants":75}],70:[function(require,module,exports){
 'use strict';
 
 
@@ -11312,7 +14028,7 @@ exports.deflate = deflate;
 exports.deflateRaw = deflateRaw;
 exports.gzip = gzip;
 
-},{"./utils/common":62,"./utils/strings":63,"./zlib/deflate":67,"./zlib/messages":72,"./zlib/zstream":74}],61:[function(require,module,exports){
+},{"./utils/common":72,"./utils/strings":73,"./zlib/deflate":77,"./zlib/messages":82,"./zlib/zstream":84}],71:[function(require,module,exports){
 'use strict';
 
 
@@ -11732,7 +14448,7 @@ exports.inflate = inflate;
 exports.inflateRaw = inflateRaw;
 exports.ungzip  = inflate;
 
-},{"./utils/common":62,"./utils/strings":63,"./zlib/constants":65,"./zlib/gzheader":68,"./zlib/inflate":70,"./zlib/messages":72,"./zlib/zstream":74}],62:[function(require,module,exports){
+},{"./utils/common":72,"./utils/strings":73,"./zlib/constants":75,"./zlib/gzheader":78,"./zlib/inflate":80,"./zlib/messages":82,"./zlib/zstream":84}],72:[function(require,module,exports){
 'use strict';
 
 
@@ -11836,7 +14552,7 @@ exports.setTyped = function (on) {
 
 exports.setTyped(TYPED_OK);
 
-},{}],63:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 // String encode/decode helpers
 'use strict';
 
@@ -12023,7 +14739,7 @@ exports.utf8border = function (buf, max) {
   return (pos + _utf8len[buf[pos]] > max) ? pos : max;
 };
 
-},{"./common":62}],64:[function(require,module,exports){
+},{"./common":72}],74:[function(require,module,exports){
 'use strict';
 
 // Note: adler32 takes 12% for level 0 and 2% for level 6.
@@ -12057,7 +14773,7 @@ function adler32(adler, buf, len, pos) {
 
 module.exports = adler32;
 
-},{}],65:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 'use strict';
 
 
@@ -12109,7 +14825,7 @@ module.exports = {
   //Z_NULL:                 null // Use -1 or null inline, depending on var type
 };
 
-},{}],66:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 'use strict';
 
 // Note: we can't get significant speed boost here.
@@ -12152,7 +14868,7 @@ function crc32(crc, buf, len, pos) {
 
 module.exports = crc32;
 
-},{}],67:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 'use strict';
 
 var utils   = require('../utils/common');
@@ -14009,7 +16725,7 @@ exports.deflatePrime = deflatePrime;
 exports.deflateTune = deflateTune;
 */
 
-},{"../utils/common":62,"./adler32":64,"./crc32":66,"./messages":72,"./trees":73}],68:[function(require,module,exports){
+},{"../utils/common":72,"./adler32":74,"./crc32":76,"./messages":82,"./trees":83}],78:[function(require,module,exports){
 'use strict';
 
 
@@ -14051,7 +16767,7 @@ function GZheader() {
 
 module.exports = GZheader;
 
-},{}],69:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 'use strict';
 
 // See state defs from inflate.js
@@ -14379,7 +17095,7 @@ module.exports = function inflate_fast(strm, start) {
   return;
 };
 
-},{}],70:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 'use strict';
 
 
@@ -15919,7 +18635,7 @@ exports.inflateSyncPoint = inflateSyncPoint;
 exports.inflateUndermine = inflateUndermine;
 */
 
-},{"../utils/common":62,"./adler32":64,"./crc32":66,"./inffast":69,"./inftrees":71}],71:[function(require,module,exports){
+},{"../utils/common":72,"./adler32":74,"./crc32":76,"./inffast":79,"./inftrees":81}],81:[function(require,module,exports){
 'use strict';
 
 
@@ -16248,7 +18964,7 @@ module.exports = function inflate_table(type, lens, lens_index, codes, table, ta
   return 0;
 };
 
-},{"../utils/common":62}],72:[function(require,module,exports){
+},{"../utils/common":72}],82:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -16263,7 +18979,7 @@ module.exports = {
   '-6':   'incompatible version' /* Z_VERSION_ERROR (-6) */
 };
 
-},{}],73:[function(require,module,exports){
+},{}],83:[function(require,module,exports){
 'use strict';
 
 
@@ -17467,7 +20183,7 @@ exports._tr_flush_block  = _tr_flush_block;
 exports._tr_tally = _tr_tally;
 exports._tr_align = _tr_align;
 
-},{"../utils/common":62}],74:[function(require,module,exports){
+},{"../utils/common":72}],84:[function(require,module,exports){
 'use strict';
 
 
@@ -17498,7 +20214,313 @@ function ZStream() {
 
 module.exports = ZStream;
 
-},{}],75:[function(require,module,exports){
+},{}],85:[function(require,module,exports){
+(function (process){(function (){
+// .dirname, .basename, and .extname methods are extracted from Node.js v8.11.1,
+// backported and transplited with Babel, with backwards-compat fixes
+
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// resolves . and .. elements in a path array with directory names there
+// must be no slashes, empty elements, or device names (c:\) in the array
+// (so also no leading and trailing slashes - it does not distinguish
+// relative and absolute paths)
+function normalizeArray(parts, allowAboveRoot) {
+  // if the path tries to go above the root, `up` ends up > 0
+  var up = 0;
+  for (var i = parts.length - 1; i >= 0; i--) {
+    var last = parts[i];
+    if (last === '.') {
+      parts.splice(i, 1);
+    } else if (last === '..') {
+      parts.splice(i, 1);
+      up++;
+    } else if (up) {
+      parts.splice(i, 1);
+      up--;
+    }
+  }
+
+  // if the path is allowed to go above the root, restore leading ..s
+  if (allowAboveRoot) {
+    for (; up--; up) {
+      parts.unshift('..');
+    }
+  }
+
+  return parts;
+}
+
+// path.resolve([from ...], to)
+// posix version
+exports.resolve = function() {
+  var resolvedPath = '',
+      resolvedAbsolute = false;
+
+  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
+    var path = (i >= 0) ? arguments[i] : process.cwd();
+
+    // Skip empty and invalid entries
+    if (typeof path !== 'string') {
+      throw new TypeError('Arguments to path.resolve must be strings');
+    } else if (!path) {
+      continue;
+    }
+
+    resolvedPath = path + '/' + resolvedPath;
+    resolvedAbsolute = path.charAt(0) === '/';
+  }
+
+  // At this point the path should be resolved to a full absolute path, but
+  // handle relative paths to be safe (might happen when process.cwd() fails)
+
+  // Normalize the path
+  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
+    return !!p;
+  }), !resolvedAbsolute).join('/');
+
+  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
+};
+
+// path.normalize(path)
+// posix version
+exports.normalize = function(path) {
+  var isAbsolute = exports.isAbsolute(path),
+      trailingSlash = substr(path, -1) === '/';
+
+  // Normalize the path
+  path = normalizeArray(filter(path.split('/'), function(p) {
+    return !!p;
+  }), !isAbsolute).join('/');
+
+  if (!path && !isAbsolute) {
+    path = '.';
+  }
+  if (path && trailingSlash) {
+    path += '/';
+  }
+
+  return (isAbsolute ? '/' : '') + path;
+};
+
+// posix version
+exports.isAbsolute = function(path) {
+  return path.charAt(0) === '/';
+};
+
+// posix version
+exports.join = function() {
+  var paths = Array.prototype.slice.call(arguments, 0);
+  return exports.normalize(filter(paths, function(p, index) {
+    if (typeof p !== 'string') {
+      throw new TypeError('Arguments to path.join must be strings');
+    }
+    return p;
+  }).join('/'));
+};
+
+
+// path.relative(from, to)
+// posix version
+exports.relative = function(from, to) {
+  from = exports.resolve(from).substr(1);
+  to = exports.resolve(to).substr(1);
+
+  function trim(arr) {
+    var start = 0;
+    for (; start < arr.length; start++) {
+      if (arr[start] !== '') break;
+    }
+
+    var end = arr.length - 1;
+    for (; end >= 0; end--) {
+      if (arr[end] !== '') break;
+    }
+
+    if (start > end) return [];
+    return arr.slice(start, end - start + 1);
+  }
+
+  var fromParts = trim(from.split('/'));
+  var toParts = trim(to.split('/'));
+
+  var length = Math.min(fromParts.length, toParts.length);
+  var samePartsLength = length;
+  for (var i = 0; i < length; i++) {
+    if (fromParts[i] !== toParts[i]) {
+      samePartsLength = i;
+      break;
+    }
+  }
+
+  var outputParts = [];
+  for (var i = samePartsLength; i < fromParts.length; i++) {
+    outputParts.push('..');
+  }
+
+  outputParts = outputParts.concat(toParts.slice(samePartsLength));
+
+  return outputParts.join('/');
+};
+
+exports.sep = '/';
+exports.delimiter = ':';
+
+exports.dirname = function (path) {
+  if (typeof path !== 'string') path = path + '';
+  if (path.length === 0) return '.';
+  var code = path.charCodeAt(0);
+  var hasRoot = code === 47 /*/*/;
+  var end = -1;
+  var matchedSlash = true;
+  for (var i = path.length - 1; i >= 1; --i) {
+    code = path.charCodeAt(i);
+    if (code === 47 /*/*/) {
+        if (!matchedSlash) {
+          end = i;
+          break;
+        }
+      } else {
+      // We saw the first non-path separator
+      matchedSlash = false;
+    }
+  }
+
+  if (end === -1) return hasRoot ? '/' : '.';
+  if (hasRoot && end === 1) {
+    // return '//';
+    // Backwards-compat fix:
+    return '/';
+  }
+  return path.slice(0, end);
+};
+
+function basename(path) {
+  if (typeof path !== 'string') path = path + '';
+
+  var start = 0;
+  var end = -1;
+  var matchedSlash = true;
+  var i;
+
+  for (i = path.length - 1; i >= 0; --i) {
+    if (path.charCodeAt(i) === 47 /*/*/) {
+        // If we reached a path separator that was not part of a set of path
+        // separators at the end of the string, stop now
+        if (!matchedSlash) {
+          start = i + 1;
+          break;
+        }
+      } else if (end === -1) {
+      // We saw the first non-path separator, mark this as the end of our
+      // path component
+      matchedSlash = false;
+      end = i + 1;
+    }
+  }
+
+  if (end === -1) return '';
+  return path.slice(start, end);
+}
+
+// Uses a mixed approach for backwards-compatibility, as ext behavior changed
+// in new Node.js versions, so only basename() above is backported here
+exports.basename = function (path, ext) {
+  var f = basename(path);
+  if (ext && f.substr(-1 * ext.length) === ext) {
+    f = f.substr(0, f.length - ext.length);
+  }
+  return f;
+};
+
+exports.extname = function (path) {
+  if (typeof path !== 'string') path = path + '';
+  var startDot = -1;
+  var startPart = 0;
+  var end = -1;
+  var matchedSlash = true;
+  // Track the state of characters (if any) we see before our first dot and
+  // after any path separator we find
+  var preDotState = 0;
+  for (var i = path.length - 1; i >= 0; --i) {
+    var code = path.charCodeAt(i);
+    if (code === 47 /*/*/) {
+        // If we reached a path separator that was not part of a set of path
+        // separators at the end of the string, stop now
+        if (!matchedSlash) {
+          startPart = i + 1;
+          break;
+        }
+        continue;
+      }
+    if (end === -1) {
+      // We saw the first non-path separator, mark this as the end of our
+      // extension
+      matchedSlash = false;
+      end = i + 1;
+    }
+    if (code === 46 /*.*/) {
+        // If this is our first dot, mark it as the start of our extension
+        if (startDot === -1)
+          startDot = i;
+        else if (preDotState !== 1)
+          preDotState = 1;
+    } else if (startDot !== -1) {
+      // We saw a non-dot and non-path separator before our dot, so we should
+      // have a good chance at having a non-empty extension
+      preDotState = -1;
+    }
+  }
+
+  if (startDot === -1 || end === -1 ||
+      // We saw a non-dot character immediately before the dot
+      preDotState === 0 ||
+      // The (right-most) trimmed path component is exactly '..'
+      preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
+    return '';
+  }
+  return path.slice(startDot, end);
+};
+
+function filter (xs, f) {
+    if (xs.filter) return xs.filter(f);
+    var res = [];
+    for (var i = 0; i < xs.length; i++) {
+        if (f(xs[i], i, xs)) res.push(xs[i]);
+    }
+    return res;
+}
+
+// String.prototype.substr - negative index don't work in IE8
+var substr = 'ab'.substr(-1) === 'b'
+    ? function (str, start, len) { return str.substr(start, len) }
+    : function (str, start, len) {
+        if (start < 0) start = str.length + start;
+        return str.substr(start, len);
+    }
+;
+
+}).call(this)}).call(this,require('_process'))
+},{"_process":88}],86:[function(require,module,exports){
 'use strict';
 
 /**
@@ -17653,7 +20675,7 @@ if (typeof module === 'object' && module.exports) {
     module.exports = polyline;
 }
 
-},{}],76:[function(require,module,exports){
+},{}],87:[function(require,module,exports){
 module.exports = function (data) {
     var lines = data.split('\n'),
                 isNameLine = true,
@@ -17719,7 +20741,193 @@ module.exports = function (data) {
     return gj;
 };
 
-},{}],77:[function(require,module,exports){
+},{}],88:[function(require,module,exports){
+// shim for using process in browser
+var process = module.exports = {};
+
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+
+var cachedSetTimeout;
+var cachedClearTimeout;
+
+function defaultSetTimout() {
+    throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout () {
+    throw new Error('clearTimeout has not been defined');
+}
+(function () {
+    try {
+        if (typeof setTimeout === 'function') {
+            cachedSetTimeout = setTimeout;
+        } else {
+            cachedSetTimeout = defaultSetTimout;
+        }
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
+    }
+    try {
+        if (typeof clearTimeout === 'function') {
+            cachedClearTimeout = clearTimeout;
+        } else {
+            cachedClearTimeout = defaultClearTimeout;
+        }
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
+    }
+} ())
+function runTimeout(fun) {
+    if (cachedSetTimeout === setTimeout) {
+        //normal enviroments in sane situations
+        return setTimeout(fun, 0);
+    }
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
+        return setTimeout(fun, 0);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedSetTimeout(fun, 0);
+    } catch(e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+            return cachedSetTimeout.call(null, fun, 0);
+        } catch(e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+            return cachedSetTimeout.call(this, fun, 0);
+        }
+    }
+
+
+}
+function runClearTimeout(marker) {
+    if (cachedClearTimeout === clearTimeout) {
+        //normal enviroments in sane situations
+        return clearTimeout(marker);
+    }
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
+        return clearTimeout(marker);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedClearTimeout(marker);
+    } catch (e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+            return cachedClearTimeout.call(null, marker);
+        } catch (e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+            return cachedClearTimeout.call(this, marker);
+        }
+    }
+
+
+
+}
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = runTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    runClearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        runTimeout(drainQueue);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+process.prependListener = noop;
+process.prependOnceListener = noop;
+
+process.listeners = function (name) { return [] }
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],89:[function(require,module,exports){
 /*
  * Given a querystring, return an object of that querystring's components.
  *
@@ -17752,7 +20960,7 @@ module.exports.qsString = function(obj, noencode) {
     }).join('&');
 };
 
-},{}],78:[function(require,module,exports){
+},{}],90:[function(require,module,exports){
 module.exports = function(x, dims) {
     if (!dims) dims = 'NSEW';
     if (typeof x !== 'string') return null;
@@ -17766,11 +20974,11 @@ module.exports = function(x, dims) {
         ((m[4] && m[4] === 'S' || m[4] === 'W') ? -1 : 1);
 };
 
-},{}],79:[function(require,module,exports){
+},{}],91:[function(require,module,exports){
 module.exports.download = require('./src/download')
 module.exports.write = require('./src/write')
 module.exports.zip = require('./src/zip')
-},{"./src/download":80,"./src/write":88,"./src/zip":89}],80:[function(require,module,exports){
+},{"./src/download":92,"./src/write":100,"./src/zip":101}],92:[function(require,module,exports){
 var zip = require('./zip');
 
 module.exports = function(gj, options) {
@@ -17778,7 +20986,7 @@ module.exports = function(gj, options) {
     location.href = 'data:application/zip;base64,' + content;
 };
 
-},{"./zip":89}],81:[function(require,module,exports){
+},{"./zip":101}],93:[function(require,module,exports){
 module.exports.enlarge = function enlargeExtent(extent, pt) {
     if (pt[0] < extent.xmin) extent.xmin = pt[0];
     if (pt[0] > extent.xmax) extent.xmax = pt[0];
@@ -17804,7 +21012,7 @@ module.exports.blank = function() {
     };
 };
 
-},{}],82:[function(require,module,exports){
+},{}],94:[function(require,module,exports){
 var types = require('./types').jstypes;
 
 module.exports.geojson = geojson;
@@ -17834,7 +21042,7 @@ function obj(_) {
     return o;
 }
 
-},{"./types":87}],83:[function(require,module,exports){
+},{"./types":99}],95:[function(require,module,exports){
 module.exports.point = justType('Point', 'POINT');
 module.exports.line = justType('LineString', 'POLYLINE');
 module.exports.polygon = justType('Polygon', 'POLYGON');
@@ -17868,7 +21076,7 @@ function isType(t) {
     return function(f) { return f.geometry.type === t; };
 }
 
-},{}],84:[function(require,module,exports){
+},{}],96:[function(require,module,exports){
 var ext = require('./extent');
 
 module.exports.write = function writePoints(coordinates, extent, shpView, shxView) {
@@ -17915,7 +21123,7 @@ module.exports.shpLength = function(coordinates) {
     return coordinates.length * 28;
 };
 
-},{"./extent":81}],85:[function(require,module,exports){
+},{"./extent":93}],97:[function(require,module,exports){
 var ext = require('./extent');
 
 module.exports.write = function writePoints(geometries, extent, shpView, shxView, TYPE) {
@@ -17995,10 +21203,10 @@ function justCoords(coords, l) {
     }
 }
 
-},{"./extent":81}],86:[function(require,module,exports){
+},{"./extent":93}],98:[function(require,module,exports){
 module.exports = 'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["Degree",0.017453292519943295]]';
 
-},{}],87:[function(require,module,exports){
+},{}],99:[function(require,module,exports){
 module.exports.geometries = {
     NULL: 0,
     POINT: 1,
@@ -18016,7 +21224,7 @@ module.exports.geometries = {
     MULTIPATCH: 31,
 };
 
-},{}],88:[function(require,module,exports){
+},{}],100:[function(require,module,exports){
 var types = require('./types'),
     dbf = require('dbf'),
     prj = require('./prj'),
@@ -18085,7 +21293,7 @@ function writeExtent(extent, view) {
     view.setFloat64(60, extent.ymax, true);
 }
 
-},{"./extent":81,"./fields":82,"./points":84,"./poly":85,"./prj":86,"./types":87,"assert":177,"dbf":6}],89:[function(require,module,exports){
+},{"./extent":93,"./fields":94,"./points":96,"./poly":97,"./prj":98,"./types":99,"assert":3,"dbf":11}],101:[function(require,module,exports){
 var write = require('./write'),
     geojson = require('./geojson'),
     prj = require('./prj'),
@@ -18119,7 +21327,7 @@ module.exports = function(gj, options) {
     return zip.generate({compression:'STORE'});
 };
 
-},{"./geojson":83,"./prj":86,"./write":88,"jszip":38}],90:[function(require,module,exports){
+},{"./geojson":95,"./prj":98,"./write":100,"jszip":47}],102:[function(require,module,exports){
 var wgs84 = require('wgs84');
 
 module.exports.heading = function(from, to) {
@@ -18173,7 +21381,7 @@ function deg(_) {
     return _ * (180 / Math.PI);
 }
 
-},{"wgs84":127}],91:[function(require,module,exports){
+},{"wgs84":143}],103:[function(require,module,exports){
 (function (global){(function (){
 ;(function(win){
 	var store = {},
@@ -18341,7 +21549,7 @@ function deg(_) {
 })(this.window || global);
 
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],92:[function(require,module,exports){
+},{}],104:[function(require,module,exports){
 module.exports.attr = attr;
 module.exports.tagClose = tagClose;
 module.exports.tag = tag;
@@ -18387,7 +21595,7 @@ function encode(_) {
         .replace(/"/g, '&quot;');
 }
 
-},{}],93:[function(require,module,exports){
+},{}],105:[function(require,module,exports){
 (function (process){(function (){
 toGeoJSON = (function() {
     'use strict';
@@ -18626,7 +21834,7 @@ toGeoJSON = (function() {
 if (typeof module !== 'undefined') module.exports = toGeoJSON;
 
 }).call(this)}).call(this,require('_process'))
-},{"_process":187,"xmldom":179}],94:[function(require,module,exports){
+},{"_process":88,"xmldom":6}],106:[function(require,module,exports){
 var strxml = require('strxml'),
     tag = strxml.tag,
     encode = strxml.encode;
@@ -18823,7 +22031,7 @@ function pairs(_) {
     return o;
 }
 
-},{"strxml":92}],95:[function(require,module,exports){
+},{"strxml":104}],107:[function(require,module,exports){
 var type = require("./type"),
     topojson = require("../../");
 
@@ -18853,7 +22061,7 @@ module.exports = function(topology, propertiesById) {
 
 function noop() {}
 
-},{"../../":"topojson","./type":123}],96:[function(require,module,exports){
+},{"../../":"topojson","./type":135}],108:[function(require,module,exports){
 
 // Computes the bounding box of the specified hash of GeoJSON objects.
 module.exports = function(objects) {
@@ -18900,7 +22108,7 @@ module.exports = function(objects) {
   return [x0, y0, x1, y1];
 };
 
-},{}],97:[function(require,module,exports){
+},{}],109:[function(require,module,exports){
 exports.name = "cartesian";
 exports.formatDistance = formatDistance;
 exports.ringArea = ringArea;
@@ -18940,7 +22148,7 @@ function distance(x0, y0, x1, y1) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-},{}],98:[function(require,module,exports){
+},{}],110:[function(require,module,exports){
 var type = require("./type"),
     systems = require("./coordinate-systems"),
     topojson = require("../../");
@@ -19031,7 +22239,7 @@ function clockwisePolygonSystem(ringArea, reverse) {
 
 function noop() {}
 
-},{"../../":"topojson","./coordinate-systems":100,"./type":123}],99:[function(require,module,exports){
+},{"../../":"topojson","./coordinate-systems":112,"./type":135}],111:[function(require,module,exports){
 // Given a hash of GeoJSON objects and an id function, invokes the id function
 // to compute a new id for each object that is a feature. The function is passed
 // the feature and is expected to return the new feature id, or null if the
@@ -19061,13 +22269,13 @@ module.exports = function(objects, id) {
   return objects;
 };
 
-},{}],100:[function(require,module,exports){
+},{}],112:[function(require,module,exports){
 module.exports = {
   cartesian: require("./cartesian"),
   spherical: require("./spherical")
 };
 
-},{"./cartesian":97,"./spherical":110}],101:[function(require,module,exports){
+},{"./cartesian":109,"./spherical":122}],113:[function(require,module,exports){
 // Given a TopoJSON topology in absolute (quantized) coordinates,
 // converts to fixed-point delta encoding.
 // This is a destructive operation that modifies the given topology!
@@ -19098,7 +22306,7 @@ module.exports = function(topology) {
   return topology;
 };
 
-},{}],102:[function(require,module,exports){
+},{}],114:[function(require,module,exports){
 var type = require("./type"),
     prune = require("./prune"),
     clockwise = require("./clockwise"),
@@ -19227,7 +22435,7 @@ function preserveNone() {
   return false;
 }
 
-},{"../../":"topojson","./clockwise":98,"./coordinate-systems":100,"./prune":106,"./type":123}],103:[function(require,module,exports){
+},{"../../":"topojson","./clockwise":110,"./coordinate-systems":112,"./prune":118,"./type":135}],115:[function(require,module,exports){
 // Given a hash of GeoJSON objects, replaces Features with geometry objects.
 // This is a destructive operation that modifies the input objects!
 module.exports = function(objects) {
@@ -19346,7 +22554,7 @@ module.exports = function(objects) {
   return objects;
 };
 
-},{}],104:[function(require,module,exports){
+},{}],116:[function(require,module,exports){
 var quantize = require("./quantize");
 
 module.exports = function(topology, Q0, Q1) {
@@ -19394,7 +22602,7 @@ module.exports = function(topology, Q0, Q1) {
   return topology;
 };
 
-},{"./quantize":107}],105:[function(require,module,exports){
+},{"./quantize":119}],117:[function(require,module,exports){
 var quantize = require("./quantize");
 
 module.exports = function(objects, bbox, Q0, Q1) {
@@ -19453,7 +22661,7 @@ module.exports = function(objects, bbox, Q0, Q1) {
   return q.transform;
 };
 
-},{"./quantize":107}],106:[function(require,module,exports){
+},{"./quantize":119}],118:[function(require,module,exports){
 module.exports = function(topology, options) {
   var verbose = false,
       objects = topology.objects,
@@ -19510,7 +22718,7 @@ module.exports = function(topology, options) {
 
 function noop() {}
 
-},{}],107:[function(require,module,exports){
+},{}],119:[function(require,module,exports){
 module.exports = function(dx, dy, kx, ky) {
 
   function quantizePoint(coordinates) {
@@ -19554,7 +22762,7 @@ module.exports = function(dx, dy, kx, ky) {
   };
 };
 
-},{}],108:[function(require,module,exports){
+},{}],120:[function(require,module,exports){
 var type = require("./type");
 
 module.exports = function(topology, options) {
@@ -19634,7 +22842,7 @@ module.exports = function(topology, options) {
 
 function noop() {}
 
-},{"./type":123}],109:[function(require,module,exports){
+},{"./type":135}],121:[function(require,module,exports){
 var topojson = require("../../"),
     systems = require("./coordinate-systems");
 
@@ -19743,7 +22951,7 @@ module.exports = function(topology, options) {
   return topology;
 };
 
-},{"../../":"topojson","./coordinate-systems":100}],110:[function(require,module,exports){
+},{"../../":"topojson","./coordinate-systems":112}],122:[function(require,module,exports){
 var π = Math.PI,
     π_4 = π / 4,
     radians = π / 180;
@@ -19824,7 +23032,7 @@ function haversin(x) {
   return (x = Math.sin(x / 2)) * x;
 }
 
-},{}],111:[function(require,module,exports){
+},{}],123:[function(require,module,exports){
 var type = require("./type");
 
 module.exports = function(objects, transform) {
@@ -20007,7 +23215,7 @@ module.exports = function(objects, transform) {
   }
 };
 
-},{"./type":123}],112:[function(require,module,exports){
+},{"./type":135}],124:[function(require,module,exports){
 var type = require("./type"),
     stitch = require("./stitch"),
     systems = require("./coordinate-systems"),
@@ -20120,7 +23328,7 @@ module.exports = function(objects, options) {
   return topology;
 };
 
-},{"./bounds":96,"./compute-id":99,"./coordinate-systems":100,"./delta":101,"./geomify":103,"./post-quantize":104,"./pre-quantize":105,"./stitch":111,"./topology/index":118,"./transform-properties":122,"./type":123}],113:[function(require,module,exports){
+},{"./bounds":108,"./compute-id":111,"./coordinate-systems":112,"./delta":113,"./geomify":115,"./post-quantize":116,"./pre-quantize":117,"./stitch":123,"./topology/index":130,"./transform-properties":134,"./type":135}],125:[function(require,module,exports){
 var join = require("./join");
 
 // Given an extracted (pre-)topology, cuts (or rotates) arcs so that all shared
@@ -20182,7 +23390,7 @@ function reverse(array, start, end) {
   }
 }
 
-},{"./join":119}],114:[function(require,module,exports){
+},{"./join":131}],126:[function(require,module,exports){
 var join = require("./join"),
     hashmap = require("./hashmap"),
     hashPoint = require("./point-hash"),
@@ -20368,7 +23576,7 @@ module.exports = function(topology) {
   return topology;
 };
 
-},{"./hashmap":116,"./join":119,"./point-equal":120,"./point-hash":121}],115:[function(require,module,exports){
+},{"./hashmap":128,"./join":131,"./point-equal":132,"./point-hash":133}],127:[function(require,module,exports){
 // Extracts the lines and rings from the specified hash of geometry objects.
 //
 // Returns an object with three properties:
@@ -20435,7 +23643,7 @@ module.exports = function(objects) {
   };
 };
 
-},{}],116:[function(require,module,exports){
+},{}],128:[function(require,module,exports){
 module.exports = function(size, hash, equal, keyType, keyEmpty, valueType) {
   if (arguments.length === 3) {
     keyType = valueType = Array;
@@ -20510,7 +23718,7 @@ module.exports = function(size, hash, equal, keyType, keyEmpty, valueType) {
   };
 };
 
-},{}],117:[function(require,module,exports){
+},{}],129:[function(require,module,exports){
 module.exports = function(size, hash, equal, type, empty) {
   if (arguments.length === 3) {
     type = Array;
@@ -20567,7 +23775,7 @@ module.exports = function(size, hash, equal, type, empty) {
   };
 };
 
-},{}],118:[function(require,module,exports){
+},{}],130:[function(require,module,exports){
 var hashmap = require("./hashmap"),
     extract = require("./extract"),
     cut = require("./cut"),
@@ -20637,7 +23845,7 @@ function equalArc(arcA, arcB) {
   return ia === ib && ja === jb;
 }
 
-},{"./cut":113,"./dedup":114,"./extract":115,"./hashmap":116}],119:[function(require,module,exports){
+},{"./cut":125,"./dedup":126,"./extract":127,"./hashmap":128}],131:[function(require,module,exports){
 var hashset = require("./hashset"),
     hashmap = require("./hashmap"),
     hashPoint = require("./point-hash"),
@@ -20752,12 +23960,12 @@ module.exports = function(topology) {
   return junctionByPoint;
 };
 
-},{"./hashmap":116,"./hashset":117,"./point-equal":120,"./point-hash":121}],120:[function(require,module,exports){
+},{"./hashmap":128,"./hashset":129,"./point-equal":132,"./point-hash":133}],132:[function(require,module,exports){
 module.exports = function(pointA, pointB) {
   return pointA[0] === pointB[0] && pointA[1] === pointB[1];
 };
 
-},{}],121:[function(require,module,exports){
+},{}],133:[function(require,module,exports){
 // TODO if quantized, use simpler Int32 hashing?
 
 var buffer = new ArrayBuffer(16),
@@ -20772,7 +23980,7 @@ module.exports = function(point) {
   return hash & 0x7fffffff;
 };
 
-},{}],122:[function(require,module,exports){
+},{}],134:[function(require,module,exports){
 // Given a hash of GeoJSON objects, transforms any properties on features using
 // the specified transform function. The function is invoked for each existing
 // property on the current feature, being passed the new properties hash, the
@@ -20817,7 +24025,7 @@ module.exports = function(objects, propertyTransform) {
   return objects;
 };
 
-},{}],123:[function(require,module,exports){
+},{}],135:[function(require,module,exports){
 module.exports = function(types) {
   for (var type in typeDefaults) {
     if (!(type in types)) {
@@ -20911,7 +24119,7 @@ var typeObjects = {
   FeatureCollection: 1
 };
 
-},{}],124:[function(require,module,exports){
+},{}],136:[function(require,module,exports){
 !function() {
   var topojson = {
     version: "1.6.8",
@@ -21445,7 +24653,7 @@ var typeObjects = {
   else this.topojson = topojson;
 }();
 
-},{}],125:[function(require,module,exports){
+},{}],137:[function(require,module,exports){
 var traverse = module.exports = function (obj) {
     return new Traverse(obj);
 };
@@ -21761,8627 +24969,14 @@ var hasOwnProperty = Object.hasOwnProperty || function (obj, key) {
     return key in obj;
 };
 
-},{}],126:[function(require,module,exports){
-module.exports = parse;
-module.exports.parse = parse;
-module.exports.stringify = stringify;
-
-var numberRegexp = /^[-+]?([0-9]*\.[0-9]+|[0-9]+)([eE][-+]?[0-9]+)?/;
-
- /*
- * Parse WKT and return GeoJSON.
- *
- * @param {string} _ A WKT geometry
- * @return {?Object} A GeoJSON geometry object
- */
-function parse(_) {
-    var parts = _.split(";"),
-        _ = parts.pop(),
-        srid = (parts.shift() || "").split("=").pop();
-
-    var i = 0;
-
-    function $(re) {
-        var match = _.substring(i).match(re);
-        if (!match) return null;
-        else {
-            i += match[0].length;
-            return match[0];
-        }
-    }
-
-    function crs(obj) {
-        if (obj && srid.match(/\d+/)) {
-            obj.crs = {
-                type: 'name',
-                properties: {
-                    name: 'urn:ogc:def:crs:EPSG::' + srid
-                }
-            };
-        }
-
-        return obj;
-    }
-
-    function white() { $(/^\s*/); }
-
-    function multicoords() {
-        white();
-        var depth = 0, rings = [], stack = [rings],
-            pointer = rings, elem;
-
-        while (elem =
-            $(/^(\()/) ||
-            $(/^(\))/) ||
-            $(/^(\,)/) ||
-            $(numberRegexp)) {
-            if (elem == '(') {
-                stack.push(pointer);
-                pointer = [];
-                stack[stack.length - 1].push(pointer);
-                depth++;
-            } else if (elem == ')') {
-                pointer = stack.pop();
-                // the stack was empty, input was malformed
-                if (!pointer) return;
-                depth--;
-                if (depth === 0) break;
-            } else if (elem === ',') {
-                pointer = [];
-                stack[stack.length - 1].push(pointer);
-            } else if (!isNaN(parseFloat(elem))) {
-                pointer.push(parseFloat(elem));
-            } else {
-                return null;
-            }
-            white();
-        }
-
-        if (depth !== 0) return null;
-        return rings;
-    }
-
-    function coords() {
-        var list = [], item, pt;
-        while (pt =
-            $(numberRegexp) ||
-            $(/^(\,)/)) {
-            if (pt == ',') {
-                list.push(item);
-                item = [];
-            } else {
-                if (!item) item = [];
-                item.push(parseFloat(pt));
-            }
-            white();
-        }
-        if (item) list.push(item);
-        return list.length ? list : null;
-    }
-
-    function point() {
-        if (!$(/^(point)/i)) return null;
-        white();
-        if (!$(/^(\()/)) return null;
-        var c = coords();
-        if (!c) return null;
-        white();
-        if (!$(/^(\))/)) return null;
-        return {
-            type: 'Point',
-            coordinates: c[0]
-        };
-    }
-
-    function multipoint() {
-        if (!$(/^(multipoint)/i)) return null;
-        white();
-        var c = multicoords();
-        if (!c) return null;
-        white();
-        return {
-            type: 'MultiPoint',
-            coordinates: c
-        };
-    }
-
-    function multilinestring() {
-        if (!$(/^(multilinestring)/i)) return null;
-        white();
-        var c = multicoords();
-        if (!c) return null;
-        white();
-        return {
-            type: 'MultiLineString',
-            coordinates: c
-        };
-    }
-
-    function linestring() {
-        if (!$(/^(linestring)/i)) return null;
-        white();
-        if (!$(/^(\()/)) return null;
-        var c = coords();
-        if (!c) return null;
-        if (!$(/^(\))/)) return null;
-        return {
-            type: 'LineString',
-            coordinates: c
-        };
-    }
-
-    function polygon() {
-        if (!$(/^(polygon)/i)) return null;
-        white();
-        return {
-            type: 'Polygon',
-            coordinates: multicoords()
-        };
-    }
-
-    function multipolygon() {
-        if (!$(/^(multipolygon)/i)) return null;
-        white();
-        return {
-            type: 'MultiPolygon',
-            coordinates: multicoords()
-        };
-    }
-
-    function geometrycollection() {
-        var geometries = [], geometry;
-
-        if (!$(/^(geometrycollection)/i)) return null;
-        white();
-
-        if (!$(/^(\()/)) return null;
-        while (geometry = root()) {
-            geometries.push(geometry);
-            white();
-            $(/^(\,)/);
-            white();
-        }
-        if (!$(/^(\))/)) return null;
-
-        return {
-            type: 'GeometryCollection',
-            geometries: geometries
-        };
-    }
-
-    function root() {
-        return point() ||
-            linestring() ||
-            polygon() ||
-            multipoint() ||
-            multilinestring() ||
-            multipolygon() ||
-            geometrycollection();
-    }
-
-    return crs(root());
-}
-
-/**
- * Stringifies a GeoJSON object into WKT
- */
-function stringify(gj) {
-    if (gj.type === 'Feature') {
-        gj = gj.geometry;
-    }
-
-    function pairWKT(c) {
-        if (c.length === 2) {
-            return c[0] + ' ' + c[1];
-        } else if (c.length === 3) {
-            return c[0] + ' ' + c[1] + ' ' + c[2];
-        }
-    }
-
-    function ringWKT(r) {
-        return r.map(pairWKT).join(', ');
-    }
-
-    function ringsWKT(r) {
-        return r.map(ringWKT).map(wrapParens).join(', ');
-    }
-
-    function multiRingsWKT(r) {
-        return r.map(ringsWKT).map(wrapParens).join(', ');
-    }
-
-    function wrapParens(s) { return '(' + s + ')'; }
-
-    switch (gj.type) {
-        case 'Point':
-            return 'POINT (' + pairWKT(gj.coordinates) + ')';
-        case 'LineString':
-            return 'LINESTRING (' + ringWKT(gj.coordinates) + ')';
-        case 'Polygon':
-            return 'POLYGON (' + ringsWKT(gj.coordinates) + ')';
-        case 'MultiPoint':
-            return 'MULTIPOINT (' + ringWKT(gj.coordinates) + ')';
-        case 'MultiPolygon':
-            return 'MULTIPOLYGON (' + multiRingsWKT(gj.coordinates) + ')';
-        case 'MultiLineString':
-            return 'MULTILINESTRING (' + ringsWKT(gj.coordinates) + ')';
-        case 'GeometryCollection':
-            return 'GEOMETRYCOLLECTION (' + gj.geometries.map(stringify).join(', ') + ')';
-        default:
-            throw new Error('stringify requires a valid GeoJSON Feature or geometry object as input');
-    }
-}
-
-},{}],127:[function(require,module,exports){
-module.exports.RADIUS = 6378137;
-module.exports.FLATTENING = 1/298.257223563;
-module.exports.POLAR_RADIUS = 6356752.3142;
-
-},{}],128:[function(require,module,exports){
-(function (Buffer){(function (){
-module.exports = BinaryReader;
-
-function BinaryReader(buffer, isBigEndian) {
-    this.buffer = buffer;
-    this.position = 0;
-    this.isBigEndian = isBigEndian || false;
-}
-
-function _read(readLE, readBE, size) {
-    return function () {
-        var value;
-
-        if (this.isBigEndian)
-            value = readBE.call(this.buffer, this.position);
-        else
-            value = readLE.call(this.buffer, this.position);
-
-        this.position += size;
-
-        return value;
-    };
-}
-
-BinaryReader.prototype.readUInt8 = _read(Buffer.prototype.readUInt8, Buffer.prototype.readUInt8, 1);
-BinaryReader.prototype.readUInt16 = _read(Buffer.prototype.readUInt16LE, Buffer.prototype.readUInt16BE, 2);
-BinaryReader.prototype.readUInt32 = _read(Buffer.prototype.readUInt32LE, Buffer.prototype.readUInt32BE, 4);
-BinaryReader.prototype.readInt8 = _read(Buffer.prototype.readInt8, Buffer.prototype.readInt8, 1);
-BinaryReader.prototype.readInt16 = _read(Buffer.prototype.readInt16LE, Buffer.prototype.readInt16BE, 2);
-BinaryReader.prototype.readInt32 = _read(Buffer.prototype.readInt32LE, Buffer.prototype.readInt32BE, 4);
-BinaryReader.prototype.readFloat = _read(Buffer.prototype.readFloatLE, Buffer.prototype.readFloatBE, 4);
-BinaryReader.prototype.readDouble = _read(Buffer.prototype.readDoubleLE, Buffer.prototype.readDoubleBE, 8);
-
-BinaryReader.prototype.readVarInt = function () {
-    var nextByte,
-        result = 0,
-        bytesRead = 0;
-
-    do {
-        nextByte = this.buffer[this.position + bytesRead];
-        result += (nextByte & 0x7F) << (7 * bytesRead);
-        bytesRead++;
-    } while (nextByte >= 0x80);
-
-    this.position += bytesRead;
-
-    return result;
-};
-
-}).call(this)}).call(this,require("buffer").Buffer)
-},{"buffer":180}],129:[function(require,module,exports){
-(function (Buffer){(function (){
-module.exports = BinaryWriter;
-
-function BinaryWriter(size, allowResize) {
-    this.buffer = new Buffer(size);
-    this.position = 0;
-    this.allowResize = allowResize;
-}
-
-function _write(write, size) {
-    return function (value, noAssert) {
-        this.ensureSize(size);
-
-        write.call(this.buffer, value, this.position, noAssert);
-        this.position += size;
-    };
-}
-
-BinaryWriter.prototype.writeUInt8 = _write(Buffer.prototype.writeUInt8, 1);
-BinaryWriter.prototype.writeUInt16LE = _write(Buffer.prototype.writeUInt16LE, 2);
-BinaryWriter.prototype.writeUInt16BE = _write(Buffer.prototype.writeUInt16BE, 2);
-BinaryWriter.prototype.writeUInt32LE = _write(Buffer.prototype.writeUInt32LE, 4);
-BinaryWriter.prototype.writeUInt32BE = _write(Buffer.prototype.writeUInt32BE, 4);
-BinaryWriter.prototype.writeInt8 = _write(Buffer.prototype.writeInt8, 1);
-BinaryWriter.prototype.writeInt16LE = _write(Buffer.prototype.writeInt16LE, 2);
-BinaryWriter.prototype.writeInt16BE = _write(Buffer.prototype.writeInt16BE, 2);
-BinaryWriter.prototype.writeInt32LE = _write(Buffer.prototype.writeInt32LE, 4);
-BinaryWriter.prototype.writeInt32BE = _write(Buffer.prototype.writeInt32BE, 4);
-BinaryWriter.prototype.writeFloatLE = _write(Buffer.prototype.writeFloatLE, 4);
-BinaryWriter.prototype.writeFloatBE = _write(Buffer.prototype.writeFloatBE, 4);
-BinaryWriter.prototype.writeDoubleLE = _write(Buffer.prototype.writeDoubleLE, 8);
-BinaryWriter.prototype.writeDoubleBE = _write(Buffer.prototype.writeDoubleBE, 8);
-
-BinaryWriter.prototype.writeBuffer = function (buffer) {
-    this.ensureSize(buffer.length);
-
-    buffer.copy(this.buffer, this.position, 0, buffer.length);
-    this.position += buffer.length;
-};
-
-BinaryWriter.prototype.writeVarInt = function (value) {
-    var length = 1;
-
-    while ((value & 0xFFFFFF80) !== 0) {
-        this.writeUInt8((value & 0x7F) | 0x80);
-        value >>>= 7;
-        length++;
-    }
-
-    this.writeUInt8(value & 0x7F);
-
-    return length;
-};
-
-BinaryWriter.prototype.ensureSize = function (size) {
-    if (this.buffer.length < this.position + size) {
-        if (this.allowResize) {
-            var tempBuffer = new Buffer(this.position + size);
-            this.buffer.copy(tempBuffer, 0, 0, this.buffer.length);
-            this.buffer = tempBuffer;
-        }
-        else {
-            throw new RangeError('index out of range');
-        }
-    }
-};
-
-}).call(this)}).call(this,require("buffer").Buffer)
-},{"buffer":180}],130:[function(require,module,exports){
-(function (Buffer){(function (){
-module.exports = Geometry;
-
-var Types = require('./types');
-var Point = require('./point');
-var LineString = require('./linestring');
-var Polygon = require('./polygon');
-var MultiPoint = require('./multipoint');
-var MultiLineString = require('./multilinestring');
-var MultiPolygon = require('./multipolygon');
-var GeometryCollection = require('./geometrycollection');
-var BinaryReader = require('./binaryreader');
-var BinaryWriter = require('./binarywriter');
-var WktParser = require('./wktparser');
-var ZigZag = require('./zigzag.js');
-
-function Geometry() {
-    this.srid = undefined;
-    this.hasZ = false;
-    this.hasM = false;
-}
-
-Geometry.parse = function (value, options) {
-    var valueType = typeof value;
-
-    if (valueType === 'string' || value instanceof WktParser)
-        return Geometry._parseWkt(value);
-    else if (Buffer.isBuffer(value) || value instanceof BinaryReader)
-        return Geometry._parseWkb(value, options);
-    else
-        throw new Error('first argument must be a string or Buffer');
-};
-
-Geometry._parseWkt = function (value) {
-    var wktParser,
-        srid;
-
-    if (value instanceof WktParser)
-        wktParser = value;
-    else
-        wktParser = new WktParser(value);
-
-    var match = wktParser.matchRegex([/^SRID=(\d+);/]);
-    if (match)
-        srid = parseInt(match[1], 10);
-
-    var geometryType = wktParser.matchType();
-    var dimension = wktParser.matchDimension();
-
-    var options = {
-        srid: srid,
-        hasZ: dimension.hasZ,
-        hasM: dimension.hasM
-    };
-
-    switch (geometryType) {
-        case Types.wkt.Point:
-            return Point._parseWkt(wktParser, options);
-        case Types.wkt.LineString:
-            return LineString._parseWkt(wktParser, options);
-        case Types.wkt.Polygon:
-            return Polygon._parseWkt(wktParser, options);
-        case Types.wkt.MultiPoint:
-            return MultiPoint._parseWkt(wktParser, options);
-        case Types.wkt.MultiLineString:
-            return MultiLineString._parseWkt(wktParser, options);
-        case Types.wkt.MultiPolygon:
-            return MultiPolygon._parseWkt(wktParser, options);
-        case Types.wkt.GeometryCollection:
-            return GeometryCollection._parseWkt(wktParser, options);
-    }
-};
-
-Geometry._parseWkb = function (value, parentOptions) {
-    var binaryReader,
-        wkbType,
-        geometryType,
-        options = {};
-
-    if (value instanceof BinaryReader)
-        binaryReader = value;
-    else
-        binaryReader = new BinaryReader(value);
-
-    binaryReader.isBigEndian = !binaryReader.readInt8();
-
-    wkbType = binaryReader.readUInt32();
-
-    options.hasSrid = (wkbType & 0x20000000) === 0x20000000;
-    options.isEwkb = (wkbType & 0x20000000) || (wkbType & 0x40000000) || (wkbType & 0x80000000);
-
-    if (options.hasSrid)
-        options.srid = binaryReader.readUInt32();
-
-    options.hasZ = false;
-    options.hasM = false;
-
-    if (!options.isEwkb && (!parentOptions || !parentOptions.isEwkb)) {
-        if (wkbType >= 1000 && wkbType < 2000) {
-            options.hasZ = true;
-            geometryType = wkbType - 1000;
-        }
-        else if (wkbType >= 2000 && wkbType < 3000) {
-            options.hasM = true;
-            geometryType = wkbType - 2000;
-        }
-        else if (wkbType >= 3000 && wkbType < 4000) {
-            options.hasZ = true;
-            options.hasM = true;
-            geometryType = wkbType - 3000;
-        }
-        else {
-            geometryType = wkbType;
-        }
-    }
-    else {
-        if (wkbType & 0x80000000)
-            options.hasZ = true;
-        if (wkbType & 0x40000000)
-            options.hasM = true;
-
-        geometryType = wkbType & 0xF;
-    }
-
-    switch (geometryType) {
-        case Types.wkb.Point:
-            return Point._parseWkb(binaryReader, options);
-        case Types.wkb.LineString:
-            return LineString._parseWkb(binaryReader, options);
-        case Types.wkb.Polygon:
-            return Polygon._parseWkb(binaryReader, options);
-        case Types.wkb.MultiPoint:
-            return MultiPoint._parseWkb(binaryReader, options);
-        case Types.wkb.MultiLineString:
-            return MultiLineString._parseWkb(binaryReader, options);
-        case Types.wkb.MultiPolygon:
-            return MultiPolygon._parseWkb(binaryReader, options);
-        case Types.wkb.GeometryCollection:
-            return GeometryCollection._parseWkb(binaryReader, options);
-        default:
-            throw new Error('GeometryType ' + geometryType + ' not supported');
-    }
-};
-
-Geometry.parseTwkb = function (value) {
-    var binaryReader,
-        options = {};
-
-    if (value instanceof BinaryReader)
-        binaryReader = value;
-    else
-        binaryReader = new BinaryReader(value);
-
-    var type = binaryReader.readUInt8();
-    var metadataHeader = binaryReader.readUInt8();
-
-    var geometryType = type & 0x0F;
-    options.precision = ZigZag.decode(type >> 4);
-    options.precisionFactor = Math.pow(10, options.precision);
-
-    options.hasBoundingBox = metadataHeader >> 0 & 1;
-    options.hasSizeAttribute = metadataHeader >> 1 & 1;
-    options.hasIdList = metadataHeader >> 2 & 1;
-    options.hasExtendedPrecision = metadataHeader >> 3 & 1;
-    options.isEmpty = metadataHeader >> 4 & 1;
-
-    if (options.hasExtendedPrecision) {
-        var extendedPrecision = binaryReader.readUInt8();
-        options.hasZ = (extendedPrecision & 0x01) === 0x01;
-        options.hasM = (extendedPrecision & 0x02) === 0x02;
-
-        options.zPrecision = ZigZag.decode((extendedPrecision & 0x1C) >> 2);
-        options.zPrecisionFactor = Math.pow(10, options.zPrecision);
-
-        options.mPrecision = ZigZag.decode((extendedPrecision & 0xE0) >> 5);
-        options.mPrecisionFactor = Math.pow(10, options.mPrecision);
-    }
-    else {
-        options.hasZ = false;
-        options.hasM = false;
-    }
-
-    if (options.hasSizeAttribute)
-        binaryReader.readVarInt();
-    if (options.hasBoundingBox) {
-        var dimensions = 2;
-
-        if (options.hasZ)
-            dimensions++;
-        if (options.hasM)
-            dimensions++;
-
-        for (var i = 0; i < dimensions; i++) {
-            binaryReader.readVarInt();
-            binaryReader.readVarInt();
-        }
-    }
-
-    switch (geometryType) {
-        case Types.wkb.Point:
-            return Point._parseTwkb(binaryReader, options);
-        case Types.wkb.LineString:
-            return LineString._parseTwkb(binaryReader, options);
-        case Types.wkb.Polygon:
-            return Polygon._parseTwkb(binaryReader, options);
-        case Types.wkb.MultiPoint:
-            return MultiPoint._parseTwkb(binaryReader, options);
-        case Types.wkb.MultiLineString:
-            return MultiLineString._parseTwkb(binaryReader, options);
-        case Types.wkb.MultiPolygon:
-            return MultiPolygon._parseTwkb(binaryReader, options);
-        case Types.wkb.GeometryCollection:
-            return GeometryCollection._parseTwkb(binaryReader, options);
-        default:
-            throw new Error('GeometryType ' + geometryType + ' not supported');
-    }
-};
-
-Geometry.parseGeoJSON = function (value) {
-    return Geometry._parseGeoJSON(value);
-};
-
-Geometry._parseGeoJSON = function (value, isSubGeometry) {
-    var geometry;
-
-    switch (value.type) {
-        case Types.geoJSON.Point:
-            geometry = Point._parseGeoJSON(value); break;
-        case Types.geoJSON.LineString:
-            geometry = LineString._parseGeoJSON(value); break;
-        case Types.geoJSON.Polygon:
-            geometry = Polygon._parseGeoJSON(value); break;
-        case Types.geoJSON.MultiPoint:
-            geometry = MultiPoint._parseGeoJSON(value); break;
-        case Types.geoJSON.MultiLineString:
-            geometry = MultiLineString._parseGeoJSON(value); break;
-        case Types.geoJSON.MultiPolygon:
-            geometry = MultiPolygon._parseGeoJSON(value); break;
-        case Types.geoJSON.GeometryCollection:
-            geometry = GeometryCollection._parseGeoJSON(value); break;
-        default:
-            throw new Error('GeometryType ' + value.type + ' not supported');
-    }
-
-    if (value.crs && value.crs.type && value.crs.type === 'name' && value.crs.properties && value.crs.properties.name) {
-        var crs = value.crs.properties.name;
-
-        if (crs.indexOf('EPSG:') === 0)
-            geometry.srid = parseInt(crs.substring(5));
-        else if (crs.indexOf('urn:ogc:def:crs:EPSG::') === 0)
-            geometry.srid = parseInt(crs.substring(22));
-        else
-            throw new Error('Unsupported crs: ' + crs);
-    }
-    else if (!isSubGeometry) {
-        geometry.srid = 4326;
-    }
-
-    return geometry;
-};
-
-Geometry.prototype.toEwkt = function () {
-    return 'SRID=' + this.srid + ';' + this.toWkt();
-};
-
-Geometry.prototype.toEwkb = function () {
-    var ewkb = new BinaryWriter(this._getWkbSize() + 4);
-    var wkb = this.toWkb();
-
-    ewkb.writeInt8(1);
-    ewkb.writeUInt32LE((wkb.slice(1, 5).readUInt32LE(0) | 0x20000000) >>> 0, true);
-    ewkb.writeUInt32LE(this.srid);
-
-    ewkb.writeBuffer(wkb.slice(5));
-
-    return ewkb.buffer;
-};
-
-Geometry.prototype._getWktType = function (wktType, isEmpty) {
-    var wkt = wktType;
-
-    if (this.hasZ && this.hasM)
-        wkt += ' ZM ';
-    else if (this.hasZ)
-        wkt += ' Z ';
-    else if (this.hasM)
-        wkt += ' M ';
-
-    if (isEmpty && !this.hasZ && !this.hasM)
-        wkt += ' ';
-
-    if (isEmpty)
-        wkt += 'EMPTY';
-
-    return wkt;
-};
-
-Geometry.prototype._getWktCoordinate = function (point) {
-    var coordinates = point.x + ' ' + point.y;
-
-    if (this.hasZ)
-        coordinates += ' ' + point.z;
-    if (this.hasM)
-        coordinates += ' ' + point.m;
-
-    return coordinates;
-};
-
-Geometry.prototype._writeWkbType = function (wkb, geometryType, parentOptions) {
-    var dimensionType = 0;
-
-    if (typeof this.srid === 'undefined' && (!parentOptions || typeof parentOptions.srid === 'undefined')) {
-        if (this.hasZ && this.hasM)
-            dimensionType += 3000;
-        else if (this.hasZ)
-            dimensionType += 1000;
-        else if (this.hasM)
-            dimensionType += 2000;
-    }
-    else {
-        if (this.hasZ)
-            dimensionType |= 0x80000000;
-        if (this.hasM)
-            dimensionType |= 0x40000000;
-    }
-
-    wkb.writeUInt32LE((dimensionType + geometryType) >>> 0, true);
-};
-
-Geometry.getTwkbPrecision = function (xyPrecision, zPrecision, mPrecision) {
-    return {
-        xy: xyPrecision,
-        z: zPrecision,
-        m: mPrecision,
-        xyFactor: Math.pow(10, xyPrecision),
-        zFactor: Math.pow(10, zPrecision),
-        mFactor: Math.pow(10, mPrecision)
-    };
-};
-
-Geometry.prototype._writeTwkbHeader = function (twkb, geometryType, precision, isEmpty) {
-    var type = (ZigZag.encode(precision.xy) << 4) + geometryType;
-    var metadataHeader = (this.hasZ || this.hasM) << 3;
-    metadataHeader += isEmpty << 4;
-
-    twkb.writeUInt8(type);
-    twkb.writeUInt8(metadataHeader);
-
-    if (this.hasZ || this.hasM) {
-        var extendedPrecision = 0;
-        if (this.hasZ)
-            extendedPrecision |= 0x1;
-        if (this.hasM)
-            extendedPrecision |= 0x2;
-
-        twkb.writeUInt8(extendedPrecision);
-    }
-};
-
-Geometry.prototype.toGeoJSON = function (options) {
-    var geoJSON = {};
-
-    if (this.srid) {
-        if (options) {
-            if (options.shortCrs) {
-                geoJSON.crs = {
-                    type: 'name',
-                    properties: {
-                        name: 'EPSG:' + this.srid
-                    }
-                };
-            }
-            else if (options.longCrs) {
-                geoJSON.crs = {
-                    type: 'name',
-                    properties: {
-                        name: 'urn:ogc:def:crs:EPSG::' + this.srid
-                    }
-                };
-            }
-        }
-    }
-
-    return geoJSON;
-};
-
-}).call(this)}).call(this,{"isBuffer":require("../../../../../../NodePackages/node_global/node_modules/browserify/node_modules/_is-buffer@1.1.6@is-buffer/index.js")})
-},{"../../../../../../NodePackages/node_global/node_modules/browserify/node_modules/_is-buffer@1.1.6@is-buffer/index.js":184,"./binaryreader":128,"./binarywriter":129,"./geometrycollection":131,"./linestring":132,"./multilinestring":133,"./multipoint":134,"./multipolygon":135,"./point":136,"./polygon":137,"./types":138,"./wktparser":139,"./zigzag.js":141}],131:[function(require,module,exports){
-module.exports = GeometryCollection;
-
-var util = require('util');
-
-var Types = require('./types');
-var Geometry = require('./geometry');
-var BinaryWriter = require('./binarywriter');
-
-function GeometryCollection(geometries, srid) {
-    Geometry.call(this);
-
-    this.geometries = geometries || [];
-	this.srid = srid;
-
-    if (this.geometries.length > 0) {
-        this.hasZ = this.geometries[0].hasZ;
-        this.hasM = this.geometries[0].hasM;
-    }
-}
-
-util.inherits(GeometryCollection, Geometry);
-
-GeometryCollection.Z = function (geometries, srid) {
-    var geometryCollection = new GeometryCollection(geometries, srid);
-    geometryCollection.hasZ = true;
-    return geometryCollection;
-};
-
-GeometryCollection.M = function (geometries, srid) {
-    var geometryCollection = new GeometryCollection(geometries, srid);
-    geometryCollection.hasM = true;
-    return geometryCollection;
-};
-
-GeometryCollection.ZM = function (geometries, srid) {
-    var geometryCollection = new GeometryCollection(geometries, srid);
-    geometryCollection.hasZ = true;
-    geometryCollection.hasM = true;
-    return geometryCollection;
-};
-
-GeometryCollection._parseWkt = function (value, options) {
-    var geometryCollection = new GeometryCollection();
-    geometryCollection.srid = options.srid;
-    geometryCollection.hasZ = options.hasZ;
-    geometryCollection.hasM = options.hasM;
-
-    if (value.isMatch(['EMPTY']))
-        return geometryCollection;
-
-    value.expectGroupStart();
-
-    do {
-        geometryCollection.geometries.push(Geometry.parse(value));
-    } while (value.isMatch([',']));
-
-    value.expectGroupEnd();
-
-    return geometryCollection;
-};
-
-GeometryCollection._parseWkb = function (value, options) {
-    var geometryCollection = new GeometryCollection();
-    geometryCollection.srid = options.srid;
-    geometryCollection.hasZ = options.hasZ;
-    geometryCollection.hasM = options.hasM;
-
-    var geometryCount = value.readUInt32();
-
-    for (var i = 0; i < geometryCount; i++)
-        geometryCollection.geometries.push(Geometry.parse(value, options));
-
-    return geometryCollection;
-};
-
-GeometryCollection._parseTwkb = function (value, options) {
-    var geometryCollection = new GeometryCollection();
-    geometryCollection.hasZ = options.hasZ;
-    geometryCollection.hasM = options.hasM;
-
-    if (options.isEmpty)
-        return geometryCollection;
-
-    var geometryCount = value.readVarInt();
-
-    for (var i = 0; i < geometryCount; i++)
-        geometryCollection.geometries.push(Geometry.parseTwkb(value));
-
-    return geometryCollection;
-};
-
-GeometryCollection._parseGeoJSON = function (value) {
-    var geometryCollection = new GeometryCollection();
-
-    for (var i = 0; i < value.geometries.length; i++)
-        geometryCollection.geometries.push(Geometry._parseGeoJSON(value.geometries[i], true));
-
-    if (geometryCollection.geometries.length > 0)
-        geometryCollection.hasZ = geometryCollection.geometries[0].hasZ;
-
-    return geometryCollection;
-};
-
-GeometryCollection.prototype.toWkt = function () {
-    if (this.geometries.length === 0)
-        return this._getWktType(Types.wkt.GeometryCollection, true);
-
-    var wkt = this._getWktType(Types.wkt.GeometryCollection, false) + '(';
-
-    for (var i = 0; i < this.geometries.length; i++)
-        wkt += this.geometries[i].toWkt() + ',';
-
-    wkt = wkt.slice(0, -1);
-    wkt += ')';
-
-    return wkt;
-};
-
-GeometryCollection.prototype.toWkb = function () {
-    var wkb = new BinaryWriter(this._getWkbSize());
-
-    wkb.writeInt8(1);
-
-    this._writeWkbType(wkb, Types.wkb.GeometryCollection);
-    wkb.writeUInt32LE(this.geometries.length);
-
-    for (var i = 0; i < this.geometries.length; i++)
-        wkb.writeBuffer(this.geometries[i].toWkb({ srid: this.srid }));
-
-    return wkb.buffer;
-};
-
-GeometryCollection.prototype.toTwkb = function () {
-    var twkb = new BinaryWriter(0, true);
-
-    var precision = Geometry.getTwkbPrecision(5, 0, 0);
-    var isEmpty = this.geometries.length === 0;
-
-    this._writeTwkbHeader(twkb, Types.wkb.GeometryCollection, precision, isEmpty);
-
-    if (this.geometries.length > 0) {
-        twkb.writeVarInt(this.geometries.length);
-
-        for (var i = 0; i < this.geometries.length; i++)
-            twkb.writeBuffer(this.geometries[i].toTwkb());
-    }
-
-    return twkb.buffer;
-};
-
-GeometryCollection.prototype._getWkbSize = function () {
-    var size = 1 + 4 + 4;
-
-    for (var i = 0; i < this.geometries.length; i++)
-        size += this.geometries[i]._getWkbSize();
-
-    return size;
-};
-
-GeometryCollection.prototype.toGeoJSON = function (options) {
-    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
-    geoJSON.type = Types.geoJSON.GeometryCollection;
-    geoJSON.geometries = [];
-
-    for (var i = 0; i < this.geometries.length; i++)
-        geoJSON.geometries.push(this.geometries[i].toGeoJSON());
-
-    return geoJSON;
-};
-
-},{"./binarywriter":129,"./geometry":130,"./types":138,"util":191}],132:[function(require,module,exports){
-module.exports = LineString;
-
-var util = require('util');
-
-var Geometry = require('./geometry');
-var Types = require('./types');
-var Point = require('./point');
-var BinaryWriter = require('./binarywriter');
-
-function LineString(points, srid) {
-    Geometry.call(this);
-
-    this.points = points || [];
-	this.srid = srid;
-
-    if (this.points.length > 0) {
-        this.hasZ = this.points[0].hasZ;
-        this.hasM = this.points[0].hasM;
-    }
-}
-
-util.inherits(LineString, Geometry);
-
-LineString.Z = function (points, srid) {
-    var lineString = new LineString(points, srid);
-    lineString.hasZ = true;
-    return lineString;
-};
-
-LineString.M = function (points, srid) {
-    var lineString = new LineString(points, srid);
-    lineString.hasM = true;
-    return lineString;
-};
-
-LineString.ZM = function (points, srid) {
-    var lineString = new LineString(points, srid);
-    lineString.hasZ = true;
-    lineString.hasM = true;
-    return lineString;
-};
-
-LineString._parseWkt = function (value, options) {
-    var lineString = new LineString();
-    lineString.srid = options.srid;
-    lineString.hasZ = options.hasZ;
-    lineString.hasM = options.hasM;
-
-    if (value.isMatch(['EMPTY']))
-        return lineString;
-
-    value.expectGroupStart();
-    lineString.points.push.apply(lineString.points, value.matchCoordinates(options));
-    value.expectGroupEnd();
-
-    return lineString;
-};
-
-LineString._parseWkb = function (value, options) {
-    var lineString = new LineString();
-    lineString.srid = options.srid;
-    lineString.hasZ = options.hasZ;
-    lineString.hasM = options.hasM;
-
-    var pointCount = value.readUInt32();
-
-    for (var i = 0; i < pointCount; i++)
-        lineString.points.push(Point._readWkbPoint(value, options));
-
-    return lineString;
-};
-
-LineString._parseTwkb = function (value, options) {
-    var lineString = new LineString();
-    lineString.hasZ = options.hasZ;
-    lineString.hasM = options.hasM;
-
-    if (options.isEmpty)
-        return lineString;
-
-    var previousPoint = new Point(0, 0, options.hasZ ? 0 : undefined, options.hasM ? 0 : undefined);
-    var pointCount = value.readVarInt();
-
-    for (var i = 0; i < pointCount; i++)
-        lineString.points.push(Point._readTwkbPoint(value, options, previousPoint));
-
-    return lineString;
-};
-
-LineString._parseGeoJSON = function (value) {
-    var lineString = new LineString();
-
-    if (value.coordinates.length > 0)
-        lineString.hasZ = value.coordinates[0].length > 2;
-
-    for (var i = 0; i < value.coordinates.length; i++)
-        lineString.points.push(Point._readGeoJSONPoint(value.coordinates[i]));
-
-    return lineString;
-};
-
-LineString.prototype.toWkt = function () {
-    if (this.points.length === 0)
-        return this._getWktType(Types.wkt.LineString, true);
-
-    return this._getWktType(Types.wkt.LineString, false) + this._toInnerWkt();
-};
-
-LineString.prototype._toInnerWkt = function () {
-    var innerWkt = '(';
-
-    for (var i = 0; i < this.points.length; i++)
-        innerWkt += this._getWktCoordinate(this.points[i]) + ',';
-
-    innerWkt = innerWkt.slice(0, -1);
-    innerWkt += ')';
-
-    return innerWkt;
-};
-
-LineString.prototype.toWkb = function (parentOptions) {
-    var wkb = new BinaryWriter(this._getWkbSize());
-
-    wkb.writeInt8(1);
-
-    this._writeWkbType(wkb, Types.wkb.LineString, parentOptions);
-    wkb.writeUInt32LE(this.points.length);
-
-    for (var i = 0; i < this.points.length; i++)
-        this.points[i]._writeWkbPoint(wkb);
-
-    return wkb.buffer;
-};
-
-LineString.prototype.toTwkb = function () {
-    var twkb = new BinaryWriter(0, true);
-
-    var precision = Geometry.getTwkbPrecision(5, 0, 0);
-    var isEmpty = this.points.length === 0;
-
-    this._writeTwkbHeader(twkb, Types.wkb.LineString, precision, isEmpty);
-
-    if (this.points.length > 0) {
-        twkb.writeVarInt(this.points.length);
-
-        var previousPoint = new Point(0, 0, 0, 0);
-        for (var i = 0; i < this.points.length; i++)
-            this.points[i]._writeTwkbPoint(twkb, precision, previousPoint);
-    }
-
-    return twkb.buffer;
-};
-
-LineString.prototype._getWkbSize = function () {
-    var coordinateSize = 16;
-
-    if (this.hasZ)
-        coordinateSize += 8;
-    if (this.hasM)
-        coordinateSize += 8;
-
-    return 1 + 4 + 4 + (this.points.length * coordinateSize);
-};
-
-LineString.prototype.toGeoJSON = function (options) {
-    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
-    geoJSON.type = Types.geoJSON.LineString;
-    geoJSON.coordinates = [];
-
-    for (var i = 0; i < this.points.length; i++) {
-        if (this.hasZ)
-            geoJSON.coordinates.push([this.points[i].x, this.points[i].y, this.points[i].z]);
-        else
-            geoJSON.coordinates.push([this.points[i].x, this.points[i].y]);
-    }
-
-    return geoJSON;
-};
-
-},{"./binarywriter":129,"./geometry":130,"./point":136,"./types":138,"util":191}],133:[function(require,module,exports){
-module.exports = MultiLineString;
-
-var util = require('util');
-
-var Types = require('./types');
-var Geometry = require('./geometry');
-var Point = require('./point');
-var LineString = require('./linestring');
-var BinaryWriter = require('./binarywriter');
-
-function MultiLineString(lineStrings, srid) {
-    Geometry.call(this);
-
-    this.lineStrings = lineStrings || [];
-	this.srid = srid;
-
-    if (this.lineStrings.length > 0) {
-        this.hasZ = this.lineStrings[0].hasZ;
-        this.hasM = this.lineStrings[0].hasM;
-    }
-}
-
-util.inherits(MultiLineString, Geometry);
-
-MultiLineString.Z = function (lineStrings, srid) {
-    var multiLineString = new MultiLineString(lineStrings, srid);
-    multiLineString.hasZ = true;
-    return multiLineString;
-};
-
-MultiLineString.M = function (lineStrings, srid) {
-    var multiLineString = new MultiLineString(lineStrings, srid);
-    multiLineString.hasM = true;
-    return multiLineString;
-};
-
-MultiLineString.ZM = function (lineStrings, srid) {
-    var multiLineString = new MultiLineString(lineStrings, srid);
-    multiLineString.hasZ = true;
-    multiLineString.hasM = true;
-    return multiLineString;
-};
-
-MultiLineString._parseWkt = function (value, options) {
-    var multiLineString = new MultiLineString();
-    multiLineString.srid = options.srid;
-    multiLineString.hasZ = options.hasZ;
-    multiLineString.hasM = options.hasM;
-
-    if (value.isMatch(['EMPTY']))
-        return multiLineString;
-
-    value.expectGroupStart();
-
-    do {
-        value.expectGroupStart();
-        multiLineString.lineStrings.push(new LineString(value.matchCoordinates(options)));
-        value.expectGroupEnd();
-    } while (value.isMatch([',']));
-
-    value.expectGroupEnd();
-
-    return multiLineString;
-};
-
-MultiLineString._parseWkb = function (value, options) {
-    var multiLineString = new MultiLineString();
-    multiLineString.srid = options.srid;
-    multiLineString.hasZ = options.hasZ;
-    multiLineString.hasM = options.hasM;
-
-    var lineStringCount = value.readUInt32();
-
-    for (var i = 0; i < lineStringCount; i++)
-        multiLineString.lineStrings.push(Geometry.parse(value, options));
-
-    return multiLineString;
-};
-
-MultiLineString._parseTwkb = function (value, options) {
-    var multiLineString = new MultiLineString();
-    multiLineString.hasZ = options.hasZ;
-    multiLineString.hasM = options.hasM;
-
-    if (options.isEmpty)
-        return multiLineString;
-
-    var previousPoint = new Point(0, 0, options.hasZ ? 0 : undefined, options.hasM ? 0 : undefined);
-    var lineStringCount = value.readVarInt();
-
-    for (var i = 0; i < lineStringCount; i++) {
-        var lineString = new LineString();
-        lineString.hasZ = options.hasZ;
-        lineString.hasM = options.hasM;
-
-        var pointCount = value.readVarInt();
-
-        for (var j = 0; j < pointCount; j++)
-            lineString.points.push(Point._readTwkbPoint(value, options, previousPoint));
-
-        multiLineString.lineStrings.push(lineString);
-    }
-
-    return multiLineString;
-};
-
-MultiLineString._parseGeoJSON = function (value) {
-    var multiLineString = new MultiLineString();
-
-    if (value.coordinates.length > 0 && value.coordinates[0].length > 0)
-        multiLineString.hasZ = value.coordinates[0][0].length > 2;
-
-    for (var i = 0; i < value.coordinates.length; i++)
-        multiLineString.lineStrings.push(LineString._parseGeoJSON({ coordinates: value.coordinates[i] }));
-
-    return multiLineString;
-};
-
-MultiLineString.prototype.toWkt = function () {
-    if (this.lineStrings.length === 0)
-        return this._getWktType(Types.wkt.MultiLineString, true);
-
-    var wkt = this._getWktType(Types.wkt.MultiLineString, false) + '(';
-
-    for (var i = 0; i < this.lineStrings.length; i++)
-        wkt += this.lineStrings[i]._toInnerWkt() + ',';
-
-    wkt = wkt.slice(0, -1);
-    wkt += ')';
-
-    return wkt;
-};
-
-MultiLineString.prototype.toWkb = function () {
-    var wkb = new BinaryWriter(this._getWkbSize());
-
-    wkb.writeInt8(1);
-
-    this._writeWkbType(wkb, Types.wkb.MultiLineString);
-    wkb.writeUInt32LE(this.lineStrings.length);
-
-    for (var i = 0; i < this.lineStrings.length; i++)
-        wkb.writeBuffer(this.lineStrings[i].toWkb({ srid: this.srid }));
-
-    return wkb.buffer;
-};
-
-MultiLineString.prototype.toTwkb = function () {
-    var twkb = new BinaryWriter(0, true);
-
-    var precision = Geometry.getTwkbPrecision(5, 0, 0);
-    var isEmpty = this.lineStrings.length === 0;
-
-    this._writeTwkbHeader(twkb, Types.wkb.MultiLineString, precision, isEmpty);
-
-    if (this.lineStrings.length > 0) {
-        twkb.writeVarInt(this.lineStrings.length);
-
-        var previousPoint = new Point(0, 0, 0, 0);
-        for (var i = 0; i < this.lineStrings.length; i++) {
-            twkb.writeVarInt(this.lineStrings[i].points.length);
-
-            for (var j = 0; j < this.lineStrings[i].points.length; j++)
-                this.lineStrings[i].points[j]._writeTwkbPoint(twkb, precision, previousPoint);
-        }
-    }
-
-    return twkb.buffer;
-};
-
-MultiLineString.prototype._getWkbSize = function () {
-    var size = 1 + 4 + 4;
-
-    for (var i = 0; i < this.lineStrings.length; i++)
-        size += this.lineStrings[i]._getWkbSize();
-
-    return size;
-};
-
-MultiLineString.prototype.toGeoJSON = function (options) {
-    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
-    geoJSON.type = Types.geoJSON.MultiLineString;
-    geoJSON.coordinates = [];
-
-    for (var i = 0; i < this.lineStrings.length; i++)
-        geoJSON.coordinates.push(this.lineStrings[i].toGeoJSON().coordinates);
-
-    return geoJSON;
-};
-
-},{"./binarywriter":129,"./geometry":130,"./linestring":132,"./point":136,"./types":138,"util":191}],134:[function(require,module,exports){
-module.exports = MultiPoint;
-
-var util = require('util');
-
-var Types = require('./types');
-var Geometry = require('./geometry');
-var Point = require('./point');
-var BinaryWriter = require('./binarywriter');
-
-function MultiPoint(points, srid) {
-    Geometry.call(this);
-
-    this.points = points || [];
-	this.srid = srid;
-	
-    if (this.points.length > 0) {
-        this.hasZ = this.points[0].hasZ;
-        this.hasM = this.points[0].hasM;
-    }
-}
-
-util.inherits(MultiPoint, Geometry);
-
-MultiPoint.Z = function (points, srid) {
-    var multiPoint = new MultiPoint(points, srid);
-    multiPoint.hasZ = true;
-    return multiPoint;
-};
-
-MultiPoint.M = function (points, srid) {
-    var multiPoint = new MultiPoint(points, srid);
-    multiPoint.hasM = true;
-    return multiPoint;
-};
-
-MultiPoint.ZM = function (points, srid) {
-    var multiPoint = new MultiPoint(points, srid);
-    multiPoint.hasZ = true;
-    multiPoint.hasM = true;
-    return multiPoint;
-};
-
-MultiPoint._parseWkt = function (value, options) {
-    var multiPoint = new MultiPoint();
-    multiPoint.srid = options.srid;
-    multiPoint.hasZ = options.hasZ;
-    multiPoint.hasM = options.hasM;
-
-    if (value.isMatch(['EMPTY']))
-        return multiPoint;
-
-    value.expectGroupStart();
-    multiPoint.points.push.apply(multiPoint.points, value.matchCoordinates(options));
-    value.expectGroupEnd();
-
-    return multiPoint;
-};
-
-MultiPoint._parseWkb = function (value, options) {
-    var multiPoint = new MultiPoint();
-    multiPoint.srid = options.srid;
-    multiPoint.hasZ = options.hasZ;
-    multiPoint.hasM = options.hasM;
-
-    var pointCount = value.readUInt32();
-
-    for (var i = 0; i < pointCount; i++)
-        multiPoint.points.push(Geometry.parse(value, options));
-
-    return multiPoint;
-};
-
-MultiPoint._parseTwkb = function (value, options) {
-    var multiPoint = new MultiPoint();
-    multiPoint.hasZ = options.hasZ;
-    multiPoint.hasM = options.hasM;
-
-    if (options.isEmpty)
-        return multiPoint;
-
-    var previousPoint = new Point(0, 0, options.hasZ ? 0 : undefined, options.hasM ? 0 : undefined);
-    var pointCount = value.readVarInt();
-
-    for (var i = 0; i < pointCount; i++)
-        multiPoint.points.push(Point._readTwkbPoint(value, options, previousPoint));
-
-    return multiPoint;
-};
-
-MultiPoint._parseGeoJSON = function (value) {
-    var multiPoint = new MultiPoint();
-
-    if (value.coordinates.length > 0)
-        multiPoint.hasZ = value.coordinates[0].length > 2;
-
-    for (var i = 0; i < value.coordinates.length; i++)
-        multiPoint.points.push(Point._parseGeoJSON({ coordinates: value.coordinates[i] }));
-
-    return multiPoint;
-};
-
-MultiPoint.prototype.toWkt = function () {
-    if (this.points.length === 0)
-        return this._getWktType(Types.wkt.MultiPoint, true);
-
-    var wkt = this._getWktType(Types.wkt.MultiPoint, false) + '(';
-
-    for (var i = 0; i < this.points.length; i++)
-        wkt += this._getWktCoordinate(this.points[i]) + ',';
-
-    wkt = wkt.slice(0, -1);
-    wkt += ')';
-
-    return wkt;
-};
-
-MultiPoint.prototype.toWkb = function () {
-    var wkb = new BinaryWriter(this._getWkbSize());
-
-    wkb.writeInt8(1);
-
-    this._writeWkbType(wkb, Types.wkb.MultiPoint);
-    wkb.writeUInt32LE(this.points.length);
-
-    for (var i = 0; i < this.points.length; i++)
-        wkb.writeBuffer(this.points[i].toWkb({ srid: this.srid }));
-
-    return wkb.buffer;
-};
-
-MultiPoint.prototype.toTwkb = function () {
-    var twkb = new BinaryWriter(0, true);
-
-    var precision = Geometry.getTwkbPrecision(5, 0, 0);
-    var isEmpty = this.points.length === 0;
-
-    this._writeTwkbHeader(twkb, Types.wkb.MultiPoint, precision, isEmpty);
-
-    if (this.points.length > 0) {
-        twkb.writeVarInt(this.points.length);
-
-        var previousPoint = new Point(0, 0, 0, 0);
-        for (var i = 0; i < this.points.length; i++)
-            this.points[i]._writeTwkbPoint(twkb, precision, previousPoint);
-    }
-
-    return twkb.buffer;
-};
-
-MultiPoint.prototype._getWkbSize = function () {
-    var coordinateSize = 16;
-
-    if (this.hasZ)
-        coordinateSize += 8;
-    if (this.hasM)
-        coordinateSize += 8;
-
-    coordinateSize += 5;
-
-    return 1 + 4 + 4 + (this.points.length * coordinateSize);
-};
-
-MultiPoint.prototype.toGeoJSON = function (options) {
-    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
-    geoJSON.type = Types.geoJSON.MultiPoint;
-    geoJSON.coordinates = [];
-
-    for (var i = 0; i < this.points.length; i++)
-        geoJSON.coordinates.push(this.points[i].toGeoJSON().coordinates);
-
-    return geoJSON;
-};
-
-},{"./binarywriter":129,"./geometry":130,"./point":136,"./types":138,"util":191}],135:[function(require,module,exports){
-module.exports = MultiPolygon;
-
-var util = require('util');
-
-var Types = require('./types');
-var Geometry = require('./geometry');
-var Point = require('./point');
-var Polygon = require('./polygon');
-var BinaryWriter = require('./binarywriter');
-
-function MultiPolygon(polygons, srid) {
-    Geometry.call(this);
-
-    this.polygons = polygons || [];
-	this.srid = srid;
-
-    if (this.polygons.length > 0) {
-        this.hasZ = this.polygons[0].hasZ;
-        this.hasM = this.polygons[0].hasM;
-    }
-}
-
-util.inherits(MultiPolygon, Geometry);
-
-MultiPolygon.Z = function (polygons, srid) {
-    var multiPolygon = new MultiPolygon(polygons, srid);
-    multiPolygon.hasZ = true;
-    return multiPolygon;
-};
-
-MultiPolygon.M = function (polygons, srid) {
-    var multiPolygon = new MultiPolygon(polygons, srid);
-    multiPolygon.hasM = true;
-    return multiPolygon;
-};
-
-MultiPolygon.ZM = function (polygons, srid) {
-    var multiPolygon = new MultiPolygon(polygons, srid);
-    multiPolygon.hasZ = true;
-    multiPolygon.hasM = true;
-    return multiPolygon;
-};
-
-MultiPolygon._parseWkt = function (value, options) {
-    var multiPolygon = new MultiPolygon();
-    multiPolygon.srid = options.srid;
-    multiPolygon.hasZ = options.hasZ;
-    multiPolygon.hasM = options.hasM;
-
-    if (value.isMatch(['EMPTY']))
-        return multiPolygon;
-
-    value.expectGroupStart();
-
-    do {
-        value.expectGroupStart();
-
-        var exteriorRing = [];
-        var interiorRings = [];
-
-        value.expectGroupStart();
-        exteriorRing.push.apply(exteriorRing, value.matchCoordinates(options));
-        value.expectGroupEnd();
-
-        while (value.isMatch([','])) {
-            value.expectGroupStart();
-            interiorRings.push(value.matchCoordinates(options));
-            value.expectGroupEnd();
-        }
-
-        multiPolygon.polygons.push(new Polygon(exteriorRing, interiorRings));
-
-        value.expectGroupEnd();
-
-    } while (value.isMatch([',']));
-
-    value.expectGroupEnd();
-
-    return multiPolygon;
-};
-
-MultiPolygon._parseWkb = function (value, options) {
-    var multiPolygon = new MultiPolygon();
-    multiPolygon.srid = options.srid;
-    multiPolygon.hasZ = options.hasZ;
-    multiPolygon.hasM = options.hasM;
-
-    var polygonCount = value.readUInt32();
-
-    for (var i = 0; i < polygonCount; i++)
-        multiPolygon.polygons.push(Geometry.parse(value, options));
-
-    return multiPolygon;
-};
-
-MultiPolygon._parseTwkb = function (value, options) {
-    var multiPolygon = new MultiPolygon();
-    multiPolygon.hasZ = options.hasZ;
-    multiPolygon.hasM = options.hasM;
-
-    if (options.isEmpty)
-        return multiPolygon;
-
-    var previousPoint = new Point(0, 0, options.hasZ ? 0 : undefined, options.hasM ? 0 : undefined);
-    var polygonCount = value.readVarInt();
-
-    for (var i = 0; i < polygonCount; i++) {
-        var polygon = new Polygon();
-        polygon.hasZ = options.hasZ;
-        polygon.hasM = options.hasM;
-
-        var ringCount = value.readVarInt();
-        var exteriorRingCount = value.readVarInt();
-
-        for (var j = 0; j < exteriorRingCount; j++)
-            polygon.exteriorRing.push(Point._readTwkbPoint(value, options, previousPoint));
-
-        for (j = 1; j < ringCount; j++) {
-            var interiorRing = [];
-
-            var interiorRingCount = value.readVarInt();
-
-            for (var k = 0; k < interiorRingCount; k++)
-                interiorRing.push(Point._readTwkbPoint(value, options, previousPoint));
-
-            polygon.interiorRings.push(interiorRing);
-        }
-
-        multiPolygon.polygons.push(polygon);
-    }
-
-    return multiPolygon;
-};
-
-MultiPolygon._parseGeoJSON = function (value) {
-    var multiPolygon = new MultiPolygon();
-
-    if (value.coordinates.length > 0 && value.coordinates[0].length > 0 && value.coordinates[0][0].length > 0)
-        multiPolygon.hasZ = value.coordinates[0][0][0].length > 2;
-
-    for (var i = 0; i < value.coordinates.length; i++)
-        multiPolygon.polygons.push(Polygon._parseGeoJSON({ coordinates: value.coordinates[i] }));
-
-    return multiPolygon;
-};
-
-MultiPolygon.prototype.toWkt = function () {
-    if (this.polygons.length === 0)
-        return this._getWktType(Types.wkt.MultiPolygon, true);
-
-    var wkt = this._getWktType(Types.wkt.MultiPolygon, false) + '(';
-
-    for (var i = 0; i < this.polygons.length; i++)
-        wkt += this.polygons[i]._toInnerWkt() + ',';
-
-    wkt = wkt.slice(0, -1);
-    wkt += ')';
-
-    return wkt;
-};
-
-MultiPolygon.prototype.toWkb = function () {
-    var wkb = new BinaryWriter(this._getWkbSize());
-
-    wkb.writeInt8(1);
-
-    this._writeWkbType(wkb, Types.wkb.MultiPolygon);
-    wkb.writeUInt32LE(this.polygons.length);
-
-    for (var i = 0; i < this.polygons.length; i++)
-        wkb.writeBuffer(this.polygons[i].toWkb({ srid: this.srid }));
-
-    return wkb.buffer;
-};
-
-MultiPolygon.prototype.toTwkb = function () {
-    var twkb = new BinaryWriter(0, true);
-
-    var precision = Geometry.getTwkbPrecision(5, 0, 0);
-    var isEmpty = this.polygons.length === 0;
-
-    this._writeTwkbHeader(twkb, Types.wkb.MultiPolygon, precision, isEmpty);
-
-    if (this.polygons.length > 0) {
-        twkb.writeVarInt(this.polygons.length);
-
-        var previousPoint = new Point(0, 0, 0, 0);
-        for (var i = 0; i < this.polygons.length; i++) {
-            twkb.writeVarInt(1 + this.polygons[i].interiorRings.length);
-
-            twkb.writeVarInt(this.polygons[i].exteriorRing.length);
-
-            for (var j = 0; j < this.polygons[i].exteriorRing.length; j++)
-                this.polygons[i].exteriorRing[j]._writeTwkbPoint(twkb, precision, previousPoint);
-
-            for (j = 0; j < this.polygons[i].interiorRings.length; j++) {
-                twkb.writeVarInt(this.polygons[i].interiorRings[j].length);
-
-                for (var k = 0; k < this.polygons[i].interiorRings[j].length; k++)
-                    this.polygons[i].interiorRings[j][k]._writeTwkbPoint(twkb, precision, previousPoint);
-            }
-        }
-    }
-
-    return twkb.buffer;
-};
-
-MultiPolygon.prototype._getWkbSize = function () {
-    var size = 1 + 4 + 4;
-
-    for (var i = 0; i < this.polygons.length; i++)
-        size += this.polygons[i]._getWkbSize();
-
-    return size;
-};
-
-MultiPolygon.prototype.toGeoJSON = function (options) {
-    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
-    geoJSON.type = Types.geoJSON.MultiPolygon;
-    geoJSON.coordinates = [];
-
-    for (var i = 0; i < this.polygons.length; i++)
-        geoJSON.coordinates.push(this.polygons[i].toGeoJSON().coordinates);
-
-    return geoJSON;
-};
-
-},{"./binarywriter":129,"./geometry":130,"./point":136,"./polygon":137,"./types":138,"util":191}],136:[function(require,module,exports){
-module.exports = Point;
-
-var util = require('util');
-
-var Geometry = require('./geometry');
-var Types = require('./types');
-var BinaryWriter = require('./binarywriter');
-var ZigZag = require('./zigzag.js');
-
-function Point(x, y, z, m, srid) {
-    Geometry.call(this);
-
-    this.x = x;
-    this.y = y;
-    this.z = z;
-    this.m = m;
-	this.srid = srid;
-
-    this.hasZ = typeof this.z !== 'undefined';
-    this.hasM = typeof this.m !== 'undefined';
-}
-
-util.inherits(Point, Geometry);
-
-Point.Z = function (x, y, z, srid) {
-    var point = new Point(x, y, z, undefined, srid);
-    point.hasZ = true;
-    return point;
-};
-
-Point.M = function (x, y, m, srid) {
-    var point = new Point(x, y, undefined, m, srid);
-    point.hasM = true;
-    return point;
-};
-
-Point.ZM = function (x, y, z, m, srid) {
-    var point = new Point(x, y, z, m, srid);
-    point.hasZ = true;
-    point.hasM = true;
-    return point;
-};
-
-Point._parseWkt = function (value, options) {
-    var point = new Point();
-    point.srid = options.srid;
-    point.hasZ = options.hasZ;
-    point.hasM = options.hasM;
-
-    if (value.isMatch(['EMPTY']))
-        return point;
-
-    value.expectGroupStart();
-
-    var coordinate = value.matchCoordinate(options);
-
-    point.x = coordinate.x;
-    point.y = coordinate.y;
-    point.z = coordinate.z;
-    point.m = coordinate.m;
-
-    value.expectGroupEnd();
-
-    return point;
-};
-
-Point._parseWkb = function (value, options) {
-    var point = Point._readWkbPoint(value, options);
-    point.srid = options.srid;
-    return point;
-};
-
-Point._readWkbPoint = function (value, options) {
-    return new Point(value.readDouble(), value.readDouble(),
-        options.hasZ ? value.readDouble() : undefined,
-        options.hasM ? value.readDouble() : undefined);
-};
-
-Point._parseTwkb = function (value, options) {
-    var point = new Point();
-    point.hasZ = options.hasZ;
-    point.hasM = options.hasM;
-
-    if (options.isEmpty)
-        return point;
-
-    point.x = ZigZag.decode(value.readVarInt()) / options.precisionFactor;
-    point.y = ZigZag.decode(value.readVarInt()) / options.precisionFactor;
-    point.z = options.hasZ ? ZigZag.decode(value.readVarInt()) / options.zPrecisionFactor : undefined;
-    point.m = options.hasM ? ZigZag.decode(value.readVarInt()) / options.mPrecisionFactor : undefined;
-
-    return point;
-};
-
-Point._readTwkbPoint = function (value, options, previousPoint) {
-    previousPoint.x += ZigZag.decode(value.readVarInt()) / options.precisionFactor;
-    previousPoint.y += ZigZag.decode(value.readVarInt()) / options.precisionFactor;
-
-    if (options.hasZ)
-        previousPoint.z += ZigZag.decode(value.readVarInt()) / options.zPrecisionFactor;
-    if (options.hasM)
-        previousPoint.m += ZigZag.decode(value.readVarInt()) / options.mPrecisionFactor;
-
-    return new Point(previousPoint.x, previousPoint.y, previousPoint.z, previousPoint.m);
-};
-
-Point._parseGeoJSON = function (value) {
-    return Point._readGeoJSONPoint(value.coordinates);
-};
-
-Point._readGeoJSONPoint = function (coordinates) {
-    if (coordinates.length === 0)
-        return new Point();
-
-    if (coordinates.length > 2)
-        return new Point(coordinates[0], coordinates[1], coordinates[2]);
-
-    return new Point(coordinates[0], coordinates[1]);
-};
-
-Point.prototype.toWkt = function () {
-    if (typeof this.x === 'undefined' && typeof this.y === 'undefined' &&
-        typeof this.z === 'undefined' && typeof this.m === 'undefined')
-        return this._getWktType(Types.wkt.Point, true);
-
-    return this._getWktType(Types.wkt.Point, false) + '(' + this._getWktCoordinate(this) + ')';
-};
-
-Point.prototype.toWkb = function (parentOptions) {
-    var wkb = new BinaryWriter(this._getWkbSize());
-
-    wkb.writeInt8(1);
-    this._writeWkbType(wkb, Types.wkb.Point, parentOptions);
-
-    if (typeof this.x === 'undefined' && typeof this.y === 'undefined') {
-        wkb.writeDoubleLE(NaN);
-        wkb.writeDoubleLE(NaN);
-
-        if (this.hasZ)
-            wkb.writeDoubleLE(NaN);
-        if (this.hasM)
-            wkb.writeDoubleLE(NaN);
-    }
-    else {
-        this._writeWkbPoint(wkb);
-    }
-
-    return wkb.buffer;
-};
-
-Point.prototype._writeWkbPoint = function (wkb) {
-    wkb.writeDoubleLE(this.x);
-    wkb.writeDoubleLE(this.y);
-
-    if (this.hasZ)
-        wkb.writeDoubleLE(this.z);
-    if (this.hasM)
-        wkb.writeDoubleLE(this.m);
-};
-
-Point.prototype.toTwkb = function () {
-    var twkb = new BinaryWriter(0, true);
-
-    var precision = Geometry.getTwkbPrecision(5, 0, 0);
-    var isEmpty = typeof this.x === 'undefined' && typeof this.y === 'undefined';
-
-    this._writeTwkbHeader(twkb, Types.wkb.Point, precision, isEmpty);
-
-    if (!isEmpty)
-        this._writeTwkbPoint(twkb, precision, new Point(0, 0, 0, 0));
-
-    return twkb.buffer;
-};
-
-Point.prototype._writeTwkbPoint = function (twkb, precision, previousPoint) {
-    var x = this.x * precision.xyFactor;
-    var y = this.y * precision.xyFactor;
-    var z = this.z * precision.zFactor;
-    var m = this.m * precision.mFactor;
-
-    twkb.writeVarInt(ZigZag.encode(x - previousPoint.x));
-    twkb.writeVarInt(ZigZag.encode(y - previousPoint.y));
-    if (this.hasZ)
-        twkb.writeVarInt(ZigZag.encode(z - previousPoint.z));
-    if (this.hasM)
-        twkb.writeVarInt(ZigZag.encode(m - previousPoint.m));
-
-    previousPoint.x = x;
-    previousPoint.y = y;
-    previousPoint.z = z;
-    previousPoint.m = m;
-};
-
-Point.prototype._getWkbSize = function () {
-    var size = 1 + 4 + 8 + 8;
-
-    if (this.hasZ)
-        size += 8;
-    if (this.hasM)
-        size += 8;
-
-    return size;
-};
-
-Point.prototype.toGeoJSON = function (options) {
-    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
-    geoJSON.type = Types.geoJSON.Point;
-
-    if (typeof this.x === 'undefined' && typeof this.y === 'undefined')
-        geoJSON.coordinates = [];
-    else if (typeof this.z !== 'undefined')
-        geoJSON.coordinates = [this.x, this.y, this.z];
-    else
-        geoJSON.coordinates = [this.x, this.y];
-
-    return geoJSON;
-};
-
-},{"./binarywriter":129,"./geometry":130,"./types":138,"./zigzag.js":141,"util":191}],137:[function(require,module,exports){
-module.exports = Polygon;
-
-var util = require('util');
-
-var Geometry = require('./geometry');
-var Types = require('./types');
-var Point = require('./point');
-var BinaryWriter = require('./binarywriter');
-
-function Polygon(exteriorRing, interiorRings, srid) {
-    Geometry.call(this);
-
-    this.exteriorRing = exteriorRing || [];
-    this.interiorRings = interiorRings || [];
-	this.srid = srid;
-
-    if (this.exteriorRing.length > 0) {
-        this.hasZ = this.exteriorRing[0].hasZ;
-        this.hasM = this.exteriorRing[0].hasM;
-    }
-}
-
-util.inherits(Polygon, Geometry);
-
-Polygon.Z = function (exteriorRing, interiorRings, srid) {
-    var polygon = new Polygon(exteriorRing, interiorRings, srid);
-    polygon.hasZ = true;
-    return polygon;
-};
-
-Polygon.M = function (exteriorRing, interiorRings, srid) {
-    var polygon = new Polygon(exteriorRing, interiorRings, srid);
-    polygon.hasM = true;
-    return polygon;
-};
-
-Polygon.ZM = function (exteriorRing, interiorRings, srid) {
-    var polygon = new Polygon(exteriorRing, interiorRings, srid);
-    polygon.hasZ = true;
-    polygon.hasM = true;
-    return polygon;
-};
-
-Polygon._parseWkt = function (value, options) {
-    var polygon = new Polygon();
-    polygon.srid = options.srid;
-    polygon.hasZ = options.hasZ;
-    polygon.hasM = options.hasM;
-
-    if (value.isMatch(['EMPTY']))
-        return polygon;
-
-    value.expectGroupStart();
-
-    value.expectGroupStart();
-    polygon.exteriorRing.push.apply(polygon.exteriorRing, value.matchCoordinates(options));
-    value.expectGroupEnd();
-
-    while (value.isMatch([','])) {
-        value.expectGroupStart();
-        polygon.interiorRings.push(value.matchCoordinates(options));
-        value.expectGroupEnd();
-    }
-
-    value.expectGroupEnd();
-
-    return polygon;
-};
-
-Polygon._parseWkb = function (value, options) {
-    var polygon = new Polygon();
-    polygon.srid = options.srid;
-    polygon.hasZ = options.hasZ;
-    polygon.hasM = options.hasM;
-
-    var ringCount = value.readUInt32();
-
-    if (ringCount > 0) {
-        var exteriorRingCount = value.readUInt32();
-
-        for (var i = 0; i < exteriorRingCount; i++)
-            polygon.exteriorRing.push(Point._readWkbPoint(value, options));
-
-        for (i = 1; i < ringCount; i++) {
-            var interiorRing = [];
-
-            var interiorRingCount = value.readUInt32();
-
-            for (var j = 0; j < interiorRingCount; j++)
-                interiorRing.push(Point._readWkbPoint(value, options));
-
-            polygon.interiorRings.push(interiorRing);
-        }
-    }
-
-    return polygon;
-};
-
-Polygon._parseTwkb = function (value, options) {
-    var polygon = new Polygon();
-    polygon.hasZ = options.hasZ;
-    polygon.hasM = options.hasM;
-
-    if (options.isEmpty)
-        return polygon;
-
-    var previousPoint = new Point(0, 0, options.hasZ ? 0 : undefined, options.hasM ? 0 : undefined);
-    var ringCount = value.readVarInt();
-    var exteriorRingCount = value.readVarInt();
-
-    for (var i = 0; i < exteriorRingCount; i++)
-        polygon.exteriorRing.push(Point._readTwkbPoint(value, options, previousPoint));
-
-    for (i = 1; i < ringCount; i++) {
-        var interiorRing = [];
-
-        var interiorRingCount = value.readVarInt();
-
-        for (var j = 0; j < interiorRingCount; j++)
-            interiorRing.push(Point._readTwkbPoint(value, options, previousPoint));
-
-        polygon.interiorRings.push(interiorRing);
-    }
-
-    return polygon;
-};
-
-Polygon._parseGeoJSON = function (value) {
-    var polygon = new Polygon();
-
-    if (value.coordinates.length > 0 && value.coordinates[0].length > 0)
-        polygon.hasZ = value.coordinates[0][0].length > 2;
-
-    for (var i = 0; i < value.coordinates.length; i++) {
-        if (i > 0)
-            polygon.interiorRings.push([]);
-
-        for (var j = 0; j  < value.coordinates[i].length; j++) {
-            if (i === 0)
-                polygon.exteriorRing.push(Point._readGeoJSONPoint(value.coordinates[i][j]));
-            else
-                polygon.interiorRings[i - 1].push(Point._readGeoJSONPoint(value.coordinates[i][j]));
-        }
-    }
-
-    return polygon;
-};
-
-Polygon.prototype.toWkt = function () {
-    if (this.exteriorRing.length === 0)
-        return this._getWktType(Types.wkt.Polygon, true);
-
-    return this._getWktType(Types.wkt.Polygon, false) + this._toInnerWkt();
-};
-
-Polygon.prototype._toInnerWkt = function () {
-    var innerWkt = '((';
-
-    for (var i = 0; i < this.exteriorRing.length; i++)
-        innerWkt += this._getWktCoordinate(this.exteriorRing[i]) + ',';
-
-    innerWkt = innerWkt.slice(0, -1);
-    innerWkt += ')';
-
-    for (i = 0; i < this.interiorRings.length; i++) {
-        innerWkt += ',(';
-
-        for (var j = 0; j < this.interiorRings[i].length; j++) {
-            innerWkt += this._getWktCoordinate(this.interiorRings[i][j]) + ',';
-        }
-
-        innerWkt = innerWkt.slice(0, -1);
-        innerWkt += ')';
-    }
-
-    innerWkt += ')';
-
-    return innerWkt;
-};
-
-Polygon.prototype.toWkb = function (parentOptions) {
-    var wkb = new BinaryWriter(this._getWkbSize());
-
-    wkb.writeInt8(1);
-
-    this._writeWkbType(wkb, Types.wkb.Polygon, parentOptions);
-
-    if (this.exteriorRing.length > 0) {
-        wkb.writeUInt32LE(1 + this.interiorRings.length);
-        wkb.writeUInt32LE(this.exteriorRing.length);
-    }
-    else {
-        wkb.writeUInt32LE(0);
-    }
-
-    for (var i = 0; i < this.exteriorRing.length; i++)
-        this.exteriorRing[i]._writeWkbPoint(wkb);
-
-    for (i = 0; i < this.interiorRings.length; i++) {
-        wkb.writeUInt32LE(this.interiorRings[i].length);
-
-        for (var j = 0; j < this.interiorRings[i].length; j++)
-            this.interiorRings[i][j]._writeWkbPoint(wkb);
-    }
-
-    return wkb.buffer;
-};
-
-Polygon.prototype.toTwkb = function () {
-    var twkb = new BinaryWriter(0, true);
-
-    var precision = Geometry.getTwkbPrecision(5, 0, 0);
-    var isEmpty = this.exteriorRing.length === 0;
-
-    this._writeTwkbHeader(twkb, Types.wkb.Polygon, precision, isEmpty);
-
-    if (this.exteriorRing.length > 0) {
-        twkb.writeVarInt(1 + this.interiorRings.length);
-
-        twkb.writeVarInt(this.exteriorRing.length);
-
-        var previousPoint = new Point(0, 0, 0, 0);
-        for (var i = 0; i < this.exteriorRing.length; i++)
-            this.exteriorRing[i]._writeTwkbPoint(twkb, precision, previousPoint);
-
-        for (i = 0; i < this.interiorRings.length; i++) {
-            twkb.writeVarInt(this.interiorRings[i].length);
-
-            for (var j = 0; j < this.interiorRings[i].length; j++)
-                this.interiorRings[i][j]._writeTwkbPoint(twkb, precision, previousPoint);
-        }
-    }
-
-    return twkb.buffer;
-};
-
-Polygon.prototype._getWkbSize = function () {
-    var coordinateSize = 16;
-
-    if (this.hasZ)
-        coordinateSize += 8;
-    if (this.hasM)
-        coordinateSize += 8;
-
-    var size = 1 + 4 + 4;
-
-    if (this.exteriorRing.length > 0)
-        size += 4 + (this.exteriorRing.length * coordinateSize);
-
-    for (var i = 0; i < this.interiorRings.length; i++)
-        size += 4 + (this.interiorRings[i].length * coordinateSize);
-
-    return size;
-};
-
-Polygon.prototype.toGeoJSON = function (options) {
-    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
-    geoJSON.type = Types.geoJSON.Polygon;
-    geoJSON.coordinates = [];
-
-    if (this.exteriorRing.length > 0) {
-        var exteriorRing = [];
-
-        for (var i = 0; i < this.exteriorRing.length; i++) {
-            if (this.hasZ)
-                exteriorRing.push([this.exteriorRing[i].x, this.exteriorRing[i].y, this.exteriorRing[i].z]);
-            else
-                exteriorRing.push([this.exteriorRing[i].x, this.exteriorRing[i].y]);
-        }
-
-        geoJSON.coordinates.push(exteriorRing);
-    }
-
-    for (var j = 0; j < this.interiorRings.length; j++) {
-        var interiorRing = [];
-
-        for (var k = 0; k < this.interiorRings[j].length; k++) {
-            if (this.hasZ)
-                interiorRing.push([this.interiorRings[j][k].x, this.interiorRings[j][k].y, this.interiorRings[j][k].z]);
-            else
-                interiorRing.push([this.interiorRings[j][k].x, this.interiorRings[j][k].y]);
-        }
-
-        geoJSON.coordinates.push(interiorRing);
-    }
-
-    return geoJSON;
-};
-
-},{"./binarywriter":129,"./geometry":130,"./point":136,"./types":138,"util":191}],138:[function(require,module,exports){
-module.exports = {
-    wkt: {
-        Point: 'POINT',
-        LineString: 'LINESTRING',
-        Polygon: 'POLYGON',
-        MultiPoint: 'MULTIPOINT',
-        MultiLineString: 'MULTILINESTRING',
-        MultiPolygon: 'MULTIPOLYGON',
-        GeometryCollection: 'GEOMETRYCOLLECTION'
-    },
-    wkb: {
-        Point: 1,
-        LineString: 2,
-        Polygon: 3,
-        MultiPoint: 4,
-        MultiLineString: 5,
-        MultiPolygon: 6,
-        GeometryCollection: 7
-    },
-    geoJSON: {
-        Point: 'Point',
-        LineString: 'LineString',
-        Polygon: 'Polygon',
-        MultiPoint: 'MultiPoint',
-        MultiLineString: 'MultiLineString',
-        MultiPolygon: 'MultiPolygon',
-        GeometryCollection: 'GeometryCollection'
-    }
-};
-
-},{}],139:[function(require,module,exports){
-module.exports = WktParser;
-
-var Types = require('./types');
-var Point = require('./point');
-
-function WktParser(value) {
-    this.value = value;
-    this.position = 0;
-}
-
-WktParser.prototype.match = function (tokens) {
-    this.skipWhitespaces();
-
-    for (var i = 0; i < tokens.length; i++) {
-        if (this.value.substring(this.position).indexOf(tokens[i]) === 0) {
-            this.position += tokens[i].length;
-            return tokens[i];
-        }
-    }
-
-    return null;
-};
-
-WktParser.prototype.matchRegex = function (tokens) {
-    this.skipWhitespaces();
-
-    for (var i = 0; i < tokens.length; i++) {
-        var match = this.value.substring(this.position).match(tokens[i]);
-
-        if (match) {
-            this.position += match[0].length;
-            return match;
-        }
-    }
-
-    return null;
-};
-
-WktParser.prototype.isMatch = function (tokens) {
-    this.skipWhitespaces();
-
-    for (var i = 0; i < tokens.length; i++) {
-        if (this.value.substring(this.position).indexOf(tokens[i]) === 0) {
-            this.position += tokens[i].length;
-            return true;
-        }
-    }
-
-    return false;
-};
-
-WktParser.prototype.matchType = function () {
-    var geometryType = this.match([Types.wkt.Point, Types.wkt.LineString, Types.wkt.Polygon, Types.wkt.MultiPoint,
-    Types.wkt.MultiLineString, Types.wkt.MultiPolygon, Types.wkt.GeometryCollection]);
-
-    if (!geometryType)
-        throw new Error('Expected geometry type');
-
-    return geometryType;
-};
-
-WktParser.prototype.matchDimension = function () {
-    var dimension = this.match(['ZM', 'Z', 'M']);
-
-    switch (dimension) {
-        case 'ZM': return { hasZ: true, hasM: true };
-        case 'Z': return { hasZ: true, hasM: false };
-        case 'M': return { hasZ: false, hasM: true };
-        default: return { hasZ: false, hasM: false };
-    }
-};
-
-WktParser.prototype.expectGroupStart = function () {
-    if (!this.isMatch(['(']))
-        throw new Error('Expected group start');
-};
-
-WktParser.prototype.expectGroupEnd = function () {
-    if (!this.isMatch([')']))
-        throw new Error('Expected group end');
-};
-
-WktParser.prototype.matchCoordinate = function (options) {
-    var match;
-
-    if (options.hasZ && options.hasM)
-        match = this.matchRegex([/^(\S*)\s+(\S*)\s+(\S*)\s+([^\s,)]*)/]);
-    else if (options.hasZ || options.hasM)
-        match = this.matchRegex([/^(\S*)\s+(\S*)\s+([^\s,)]*)/]);
-    else
-        match = this.matchRegex([/^(\S*)\s+([^\s,)]*)/]);
-
-    if (!match)
-        throw new Error('Expected coordinates');
-
-    if (options.hasZ && options.hasM)
-        return new Point(parseFloat(match[1]), parseFloat(match[2]), parseFloat(match[3]), parseFloat(match[4]));
-    else if (options.hasZ)
-        return new Point(parseFloat(match[1]), parseFloat(match[2]), parseFloat(match[3]));
-    else if (options.hasM)
-        return new Point(parseFloat(match[1]), parseFloat(match[2]), undefined, parseFloat(match[3]));
-    else
-        return new Point(parseFloat(match[1]), parseFloat(match[2]));
-};
-
-WktParser.prototype.matchCoordinates = function (options) {
-    var coordinates = [];
-
-    do {
-        var startsWithBracket = this.isMatch(['(']);
-
-        coordinates.push(this.matchCoordinate(options));
-
-        if (startsWithBracket)
-            this.expectGroupEnd();
-    } while (this.isMatch([',']));
-
-    return coordinates;
-};
-
-WktParser.prototype.skipWhitespaces = function () {
-    while (this.position < this.value.length && this.value[this.position] === ' ')
-        this.position++;
-};
-
-},{"./point":136,"./types":138}],140:[function(require,module,exports){
-exports.Types = require('./types');
-exports.Geometry = require('./geometry');
-exports.Point = require('./point');
-exports.LineString = require('./linestring');
-exports.Polygon = require('./polygon');
-exports.MultiPoint = require('./multipoint');
-exports.MultiLineString = require('./multilinestring');
-exports.MultiPolygon = require('./multipolygon');
-exports.GeometryCollection = require('./geometrycollection');
-},{"./geometry":130,"./geometrycollection":131,"./linestring":132,"./multilinestring":133,"./multipoint":134,"./multipolygon":135,"./point":136,"./polygon":137,"./types":138}],141:[function(require,module,exports){
-module.exports = {
-    encode: function (value) {
-        return (value << 1) ^ (value >> 31);
-    },
-    decode: function (value) {
-        return (value >> 1) ^ (-(value & 1));
-    }
-};
-
-},{}],142:[function(require,module,exports){
-module.exports = extend
-
-function extend() {
-    var target = {}
-
-    for (var i = 0; i < arguments.length; i++) {
-        var source = arguments[i]
-
-        for (var key in source) {
-            if (source.hasOwnProperty(key)) {
-                target[key] = source[key]
-            }
-        }
-    }
-
-    return target
-}
-
-},{}],143:[function(require,module,exports){
-module.exports = function(hostname) {
-    // Settings for geojson.io
-    L.mapbox.accessToken = 'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXFhYTA2bTMyeW44ZG0ybXBkMHkifQ.gUGbDOPUN1v1fTs5SeOR4A';
-    if (hostname === 'geojson.io') {
-        L.mapbox.config.FORCE_HTTPS = true;
-        return {
-            client_id: '62c753fd0faf18392d85',
-            gatekeeper_url: 'https://geojsonioauth.herokuapp.com'
-        };
-    // Customize these settings for your own development/deployment
-    // version of geojson.io.
-    } else {
-        L.mapbox.config.HTTP_URL = 'http://a.tiles.mapbox.com/v4';
-        L.mapbox.config.HTTPS_URL = 'https://a.tiles.mapbox.com/v4';
-        L.mapbox.config.FORCE_HTTPS = true;
-        L.mapbox.config.REQUIRE_ACCESS_TOKEN = true;
-        return {
-            GithubAPI: null,
-            client_id: 'bb7bbe70bd1f707125bc',
-            gatekeeper_url: 'https://localhostauth.herokuapp.com'
-        };
-    }
-};
-
-},{}],144:[function(require,module,exports){
-module.exports = api;
-
-function api(context) {
-    if (typeof console === 'undefined' || !console || !console.log) return;
-
-    console.log('%c⚛ geojson.io api ⚛', 'font-family:monospace;font-size:20px;color:darkblue;');
-    console.log('%cfrom here, you can customize geojson.io to your liking by mucking around with the internals', 'font-family:monospace;font-size:14px;color:darkblue;');
-    console.log('%chere\'s what\'s available ↓', 'color:blue;');
-    console.log('');
-
-    console.log('%c- window.api.map: the leaflet map object', 'font-weight:bold;');
-    console.log('%O', context.map);
-
-    console.log('%c- window.api.mapLayer: the leaflet mapLayer object', 'font-weight:bold;');
-    console.log('%O', context.mapLayer);
-
-    console.log('%c- window.api.drawControl: the leaflet.draw control', 'font-weight:bold;');
-    console.log('%O', context.drawControl);
-
-    console.log('');
-
-    console.log('%c- window.api.data: the data model', 'font-weight:bold;');
-    console.log('%O', context.data);
-
-    console.log('');
-    console.log('%cExample:', 'font-weight:bold;');
-    console.log('');
-    console.log('%c  window.api.map.setView([38, -78], 5);', 'color:green;');
-
-    console.log('');
-    console.log('%c  window.api.data.mergeFeatures([{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [0, 0] } }]);', 'color:green;');
-
-    window.api = {
-        map: context.map,
-        mapLayer: context.mapLayer,
-        drawControl: context.drawControl,
-        data: context.data
-    };
-
-    d3.rebind(window.api, context.dispatch, 'on');
-}
-
-},{}],145:[function(require,module,exports){
-var clone = require('clone'),
-    xtend = require('xtend'),
-    config = require('../config.js')(location.hostname),
-    source = {
-        gist: require('../source/gist'),
-        github: require('../source/github'),
-        local: require('../source/local')
-    };
-
-function _getData() {
-    return {
-        map: {
-            type: 'FeatureCollection',
-            features: []
-        },
-        dirty: false,
-        source: null,
-        meta: null,
-        type: 'local'
-    };
-}
-
-module.exports = function(context) {
-
-    var _data = _getData();
-
-    function mapFile(gist) {
-        var f;
-        var content;
-
-        for (f in gist.files) {
-            content = gist.files[f].content;
-            if (f.indexOf('.geojson') !== -1 && content) {
-                return f;
-            }
-        }
-
-        for (f in gist.files) {
-            content = gist.files[f].content;
-            if (f.indexOf('.json') !== -1 && content) {
-                return f;
-            }
-        }
-    }
-
-    var data = {};
-
-    data.hasFeatures = function() {
-        return !!(_data.map && _data.map.features && _data.map.features.length);
-    };
-
-    data.set = function(obj, src) {
-        for (var k in obj) {
-            _data[k] = (typeof obj[k] === 'object') ? clone(obj[k], false) : obj[k];
-        }
-        if (obj.dirty !== false) data.dirty = true;
-        context.dispatch.change({
-            obj: obj,
-            source: src
-        });
-        return data;
-    };
-
-    data.clear = function() {
-        data.set(_getData());
-    };
-
-    data.mergeFeatures = function(features, src) {
-        function coerceNum(feature) {
-            var props = feature.properties,
-                keys = Object.keys(props),
-                length = keys.length;
-
-            for (var i = 0; i < length; i++) {
-                var key = keys[i];
-                var value = props[key];
-                feature.properties[key] = losslessNumber(value);
-            }
-
-            return feature;
-        }
-
-        function losslessNumber(x) {
-            var fl = parseFloat(x);
-            if (fl.toString() === x) return fl;
-            else return x;
-        }
-
-        _data.map.features = (_data.map.features || []).concat(features.map(coerceNum));
-        return data.set({ map: _data.map }, src);
-    };
-
-    data.get = function(k) {
-        return _data[k];
-    };
-
-    data.all = function() {
-        return clone(_data, false);
-    };
-
-    data.fetch = function(q, cb) {
-        var type = q.id.split(':')[0];
-
-        switch(type) {
-            case 'gist':
-                var id = q.id.split(':')[1].split('/')[1];
-
-                // From: https://api.github.com/gists/dfa850f66f61ddc58bbf
-                // Gists > 1 MB will have truncated set to true. Request
-                // the raw URL in those cases.
-                source.gist.load(id, context, function(err, d) {
-                    if (err) return cb(err, d);
-
-                    var file = mapFile(d);
-                    // Test for .json or .geojson found
-                    if (typeof file === 'undefined') return cb(err, d);
-
-                    var f = d.files[file];
-                    if (f.truncated === true) {
-                        source.gist.loadRaw(f.raw_url, context, function(err, content) {
-                            if (err) return cb(err);
-                            return cb(err, xtend(d, { file: f.filename, content: JSON.parse(content) }));
-                        });
-                    } else {
-                        return cb(err, xtend(d, { file: f.filename, content: JSON.parse(f.content) }));
-                    }
-                });
-
-                break;
-            case 'github':
-                var url = q.id.split('/');
-                var parts = {
-                    user: url[0].split(':')[1],
-                    repo: url[1],
-                    branch: url[3],
-                    path: (url.slice(4) || []).join('/')
-                };
-
-                source.github.load(parts, context, function(err, meta) {
-                    if (err) return cb(err);
-                    return source.github.loadRaw(parts, meta.sha, context, function(err, file) {
-                        try {
-                            return cb(err, xtend(meta, { content: JSON.parse(file) }));
-                        } catch(e) {
-                            // this was not a github file
-                            location.hash = '';
-                            return cb(e);
-                        }
-                    });
-                });
-
-                break;
-        }
-    };
-
-    data.parse = function(d, browser) {
-        var endpoint = config.GithubAPI || 'https://github.com/';
-        var login,
-            repo,
-            branch,
-            path,
-            chunked,
-            file;
-
-        if (d.files) d.type = 'gist';
-        var type = d.length ? d[d.length - 1].type : d.type;
-        if (d.commit) type = 'commit';
-        switch (type) {
-            case 'commit':
-                data.set({
-                    source: d.content
-                });
-                break;
-            case 'local':
-                data.set({
-                    type: 'local',
-                    map: d.content,
-                    path: d.path
-                });
-                break;
-            case 'blob':
-                login = d[0].login;
-                repo = d[1].name;
-                branch = d[2].name;
-                path = d.slice(3).map(function(p) {
-                    return p.path;
-                }).join('/');
-
-                data.set({
-                    type: 'github',
-                    source: d,
-                    meta: {
-                        login: login,
-                        repo: repo,
-                        branch: branch,
-                        name: d.path
-                    },
-                    path: path,
-                    route: 'github:' + [
-                        login,
-                        repo,
-                        'blob',
-                        branch,
-                        path
-                    ].join('/'),
-                    url: [
-                        endpoint,
-                        login,
-                        repo,
-                        'blob',
-                        branch,
-                        path
-                    ].join('/')
-                });
-                if (d.content) data.set({ map: d.content });
-                break;
-            case 'file':
-                chunked = d.html_url.split('/');
-                login = chunked[3];
-                repo = chunked[4];
-                branch = chunked[6];
-
-                data.set({
-                    type: 'github',
-                    source: d,
-                    meta: {
-                        login: login,
-                        repo: repo,
-                        branch: branch,
-                        name: d.name,
-                        sha: d.sha
-                    },
-                    map: d.content,
-                    path: d.path,
-                    route: 'github:' + [
-                        login,
-                        repo,
-                        'blob',
-                        branch,
-                        d.path
-                    ].join('/'),
-                    url: d.html_url
-                });
-                break;
-            case 'gist':
-                login = (d.owner && d.owner.login) || 'anonymous';
-                path = [login, d.id].join('/');
-
-                var name = mapFile(d);
-
-                try {
-                    if (d.files[name].content) data.set({ map: JSON.parse(d.files[name].content) });
-                } catch (e) {
-                    console.error(e);
-                }
-                data.set({
-                    type: 'gist',
-                    source: d,
-                    meta: {
-                        login: login,
-                        name: name
-                    },
-                    path: path,
-                    route: 'gist:' + path,
-                    url: d.html_url
-                });
-                break;
-        }
-    };
-
-    data.save = function(cb) {
-        var type = context.data.get('type');
-        if (type === 'github') {
-            source.github.save(context, cb);
-        } else if (type === 'gist') {
-            source.gist.save(context, cb);
-        } else if (type === 'local') {
-            if (context.data.path) {
-                source.local.save(context, cb);
-            } else {
-                source.gist.save(context, cb);
-            }
-        } else {
-            source.gist.save(context, cb);
-        }
-    };
-
-    return data;
-};
-
-},{"../config.js":143,"../source/gist":161,"../source/github":162,"../source/local":163,"clone":4,"xtend":142}],146:[function(require,module,exports){
-var qs = require('qs-hash'),
-    zoomextent = require('../lib/zoomextent'),
-    flash = require('../ui/flash');
-
-module.exports = function(context) {
-
-    function success(err, d) {
-        context.container.select('.map').classed('loading', false);
-
-        var message,
-            url = /(http:\/\/\S*)/g;
-
-        if (err) {
-            try {
-                message = err.message || JSON.parse(err.responseText).message
-                    .replace(url, '<a href="$&">$&</a>');
-            } catch(e) {
-                message = 'Sorry, an error occurred.';
-            }
-            return flash(context.container, message);
-        }
-
-        context.data.parse(d);
-
-        if (!qs.stringQs(location.hash.substring(1)).map || mapDefault()) {
-            zoomextent(context);
-        }
-    }
-
-    function mapDefault() {
-        return context.map.getZoom() == 2 || context.map.getCenter().equals(new L.LatLng(20, 0));
-    }
-
-    function inlineJSON(data) {
-        try {
-            context.data.set({
-                map: JSON.parse(data)
-            });
-            location.hash = '';
-            zoomextent(context);
-        } catch(e) {
-            return flash(context.container, 'Could not parse JSON');
-        }
-    }
-
-    function loadUrl(data) {
-        d3.json(data)
-            .header('Accept', 'application/vnd.geo+json')
-            .on('load', onload)
-            .on('error', onerror)
-            .get();
-
-        function onload(d) {
-            context.data.set({ map: d });
-            location.hash = '';
-            zoomextent(context);
-        }
-
-        function onerror() {
-            return flash(context.container, 'Could not load external file. External files must be served with CORS and be valid GeoJSON.');
-        }
-    }
-
-    return function(query) {
-        if (!query.id && !query.data) return;
-
-        var oldRoute = d3.event ? qs.stringQs(d3.event.oldURL.split('#')[1]).id :
-            context.data.get('route');
-
-        if (query.data) {
-            var type = query.data.match(/^(data\:[\w\-]+\/[\w\-]+\,?)/);
-            if (type) {
-                if (type[0] == 'data:application/json,') {
-                    inlineJSON(query.data.replace(type[0], ''));
-                } else if (type[0] == 'data:text/x-url,') {
-                    loadUrl(query.data.replace(type[0], ''));
-                }
-            }
-        } else if (query.id !== oldRoute) {
-            context.container.select('.map').classed('loading', true);
-            context.data.fetch(query, success);
-        }
-    };
-};
-
-},{"../lib/zoomextent":157,"../ui/flash":167,"qs-hash":77}],147:[function(require,module,exports){
-var zoomextent = require('../lib/zoomextent'),
-    qs = require('qs-hash');
-
-module.exports = function(context) {
-
-    d3.select(window).on('unload', onunload);
-    context.dispatch.on('change', onchange);
-
-    var query = qs.stringQs(location.hash.split('#')[1] || '');
-
-    if (location.hash !== '#new' && !query.id && !query.data) {
-        var rec = context.storage.get('recover');
-        if (rec && confirm('recover your map from the last time you edited?')) {
-            context.data.set(rec);
-            setTimeout(function() {
-                zoomextent(context);
-            }, 100);
-        } else {
-            context.storage.remove('recover');
-        }
-    }
-
-    function onunload() {
-        if (context.data.get('type') === 'local' && context.data.hasFeatures()) {
-            try {
-                context.storage.set('recover', context.data.all());
-            } catch(e) {
-                // QuotaStorageExceeded
-            }
-        } else {
-            context.storage.remove('recover');
-        }
-    }
-
-    function onchange() {
-        if (context.data.get('type') !== 'local') {
-            context.storage.remove('recover');
-        }
-    }
-};
-
-},{"../lib/zoomextent":157,"qs-hash":77}],148:[function(require,module,exports){
-var config = require('../config.js')(location.hostname);
-
-module.exports = function(context) {
-    var repo = {};
-
-    repo.details = function(callback) {
-        var endpoint = (config.GithubAPI) ? config.GithubAPI + '/api/v3/repos/' : 'https://api.github.com/repos/';
-        var cached = context.storage.get('github_repo_details'),
-            meta = context.data.get('meta'),
-            login = meta.login,
-            repo = meta.repo;
-
-        if (cached && cached.login === login && cached.repo === repo &&
-            cached.when > (+new Date() - 1000 * 60 * 60)) {
-            callback(null, cached.data);
-        } else {
-            context.storage.remove('github_repo_details');
-
-            d3.json(endpoint + [login, repo].join('/'))
-                .header('Authorization', 'token ' + context.storage.get('github_token'))
-                .on('load', onload)
-                .on('error', onerror)
-                .get();
-        }
-
-        function onload(repo) {
-            context.storage.set('github_repo_details', {
-                when: +new Date(),
-                data: repo
-            });
-            context.storage.set('github_repo', repo);
-            callback(null, repo);
-        }
-
-        function onerror(err) {
-            context.storage.remove('github_repo_details');
-            callback(new Error(err));
-        }
-    };
-
-    return repo;
-};
-
-},{"../config.js":143}],149:[function(require,module,exports){
-var qs = require('qs-hash'),
-    xtend = require('xtend');
-
-module.exports = function(context) {
-    var router = {};
-
-    router.on = function() {
-        d3.select(window).on('hashchange.router', route);
-        context.dispatch.on('change.route', unroute);
-        context.dispatch.route(getQuery());
-        return router;
-    };
-
-    router.off = function() {
-        d3.select(window).on('hashchange.router', null);
-        return router;
-    };
-
-    function route() {
-        var oldHash = d3.event.oldURL.split('#')[1] || '',
-            newHash = d3.event.newURL.split('#')[1] || '',
-            oldQuery = qs.stringQs(oldHash),
-            newQuery = qs.stringQs(newHash);
-
-        if (isOld(oldHash)) return upgrade(oldHash);
-        if (newQuery.id !== oldQuery.id) context.dispatch.route(newQuery);
-    }
-
-    function isOld(id) {
-        return (id.indexOf('gist') === 0 || id.indexOf('github') === 0 || !isNaN(parseInt(id, 10)));
-    }
-
-    function upgrade(id) {
-        var split;
-        if (isNaN(parseInt(id, 10))) {
-            split = id.split(':');
-            location.hash = '#id=' + (split[1].indexOf('/') === 0 ?
-                [split[0], split[1].substring(1)].join(':') : id);
-        } else {
-            location.hash = '#id=gist:/' + id;
-        }
-    }
-
-    function unroute() {
-        var query = getQuery();
-        var rev = reverseRoute();
-        if (rev.id && query.id !== rev.id) {
-            location.hash = '#' + qs.qsString(rev);
-        }
-    }
-
-    function getQuery() {
-        return qs.stringQs(window.location.hash.substring(1));
-    }
-
-    function reverseRoute() {
-        var query = getQuery();
-
-        return xtend(query, {
-            id: context.data.get('route')
-        });
-    }
-
-    return router;
-};
-
-},{"qs-hash":77,"xtend":142}],150:[function(require,module,exports){
-var config = require('../config.js')(location.hostname);
-
-module.exports = function(context) {
-    var user = {};
-
-    user.details = function(callback) {
-        if (!context.storage.get('github_token')) return callback(new Error('not logged in'));
-
-        var cached = context.storage.get('github_user_details');
-
-        if (cached && cached.when > (+new Date() - 1000 * 60 * 60)) {
-            callback(null, cached.data);
-        } else {
-            context.storage.remove('github_user_details');
-            var endpoint = config.GithubAPI ? config.GithubAPI + '/api/v3' : 'https://api.github.com';
-
-            d3.json(endpoint + '/user')
-                .header('Authorization', 'token ' + context.storage.get('github_token'))
-                .on('load', onload)
-                .on('error', onerror)
-                .get();
-        }
-
-        function onload(user) {
-            context.storage.set('github_user_details', {
-                when: +new Date(),
-                data: user
-            });
-            context.storage.set('github_user', user);
-            callback(null, user);
-        }
-
-        function onerror() {
-            user.logout();
-            context.storage.remove('github_user_details');
-            callback(new Error('not logged in'));
-        }
-    };
-
-    user.signXHR = function(xhr) {
-        return user.token() ?
-            xhr.header('Authorization', 'token ' + user.token()) : xhr;
-    };
-
-    user.authenticate = function() {
-        window.location.href = (config.GithubAPI || 'https://github.com') + '/login/oauth/authorize?client_id=' +
-            config.client_id +
-            '&scope=gist,repo';
-    };
-
-    user.token = function(callback) {
-        return context.storage.get('github_token');
-    };
-
-    user.logout = function() {
-        context.storage.remove('github_token');
-    };
-
-    user.login = function() {
-        context.storage.remove('github_token');
-    };
-
-    function killTokenUrl() {
-        if (window.location.href.indexOf('?code') !== -1) {
-            window.location.href = window.location.href.replace(/\?code=.*$/, '');
-        }
-    }
-
-    if (window.location.search && window.location.search.indexOf('?code') === 0) {
-        var code = window.location.search.replace(/\?{0,1}code=([^\#\&]+).*$/g, '$1');
-        d3.select('.map').classed('loading', true);
-        d3.json(config.gatekeeper_url + '/authenticate/' + code)
-            .on('load', function(l) {
-                d3.select('.map').classed('loading', false);
-                if (l.token) window.localStorage.github_token = l.token;
-                killTokenUrl();
-            })
-            .on('error', function() {
-                d3.select('.map').classed('loading', false);
-                alert('Authentication with GitHub failed');
-            })
-            .get();
-    }
-
-    return user;
-};
-
-},{"../config.js":143}],151:[function(require,module,exports){
-window.require = require;
-var ui = require("./ui"),
-  map = require("./ui/map"),
-  data = require("./core/data"),
-  loader = require("./core/loader"),
-  router = require("./core/router"),
-  recovery = require("./core/recovery"),
-  repo = require("./core/repo"),
-  user = require("./core/user"),
-  api = require("./core/api"),
-  store = require("store");
-
-var gjIO = geojsonIO(),
-  gjUI = ui(gjIO).write;
-
-d3.select(".geojsonio").call(gjUI);
-
-gjIO.recovery = recovery(gjIO);
-gjIO.router.on();
-
-api(gjIO);
-
-function geojsonIO() {
-  var context = {};
-  context.dispatch = d3.dispatch("change", "route");
-  context.storage = store;
-  context.map = map(context);
-  context.data = data(context);
-  context.dispatch.on("route", loader(context));
-  context.repo = repo(context);
-  context.router = router(context);
-  context.user = user(context);
-  return context;
-}
-
-},{"./core/api":144,"./core/data":145,"./core/loader":146,"./core/recovery":147,"./core/repo":148,"./core/router":149,"./core/user":150,"./ui":164,"./ui/map":169,"store":91}],152:[function(require,module,exports){
-var qs = require('qs-hash');
-require('leaflet-hash');
-
-L.Hash.prototype.parseHash = function(hash) {
-    var query = qs.stringQs(hash.substring(1));
-    var map = query.map || '';
-    var args = map.split('/');
-    if (args.length == 3) {
-        var zoom = parseInt(args[0], 10),
-            lat = parseFloat(args[1]),
-                lon = parseFloat(args[2]);
-                if (isNaN(zoom) || isNaN(lat) || isNaN(lon)) {
-                    return false;
-                } else {
-                    return {
-                        center: new L.LatLng(lat, lon),
-                        zoom: zoom
-                    };
-                }
-    } else {
-        return false;
-    }
-};
-
-L.Hash.prototype.formatHash = function(map) {
-    var query = qs.stringQs(location.hash.substring(1)),
-        center = map.getCenter(),
-            zoom = map.getZoom(),
-                precision = Math.max(0, Math.ceil(Math.log(zoom) / Math.LN2));
-
-                query.map = [zoom,
-                    center.lat.toFixed(precision),
-                    center.lng.toFixed(precision)
-                ].join('/');
-
-                return '#' + qs.qsString(query);
-};
-
-},{"leaflet-hash":54,"qs-hash":77}],153:[function(require,module,exports){
-(function (Buffer){(function (){
-var escape = require('escape-html'),
-    geojsonRandom = require('geojson-random'),
-    geojsonExtent = require('geojson-extent'),
-    geojsonFlatten = require('geojson-flatten'),
-    polyline = require('polyline'),
-    wkx = require('wkx'),
-    zoomextent = require('../lib/zoomextent');
-
-module.exports.adduserlayer = function(context, _url, _name) {
-    var url = escape(_url), name = escape(_name);
-    var layer = L.tileLayer(url, {
-        maxZoom: context.map.getMaxZoom()
-    });
-    if (context.layerControl) {
-        context.map.addLayer(layer);
-        context.layerControl.addOverlay(layer, name);
-    }
-    else {
-        context.layerControl = L.control.layers(null, {}, {
-            position: 'bottomright',
-            collapsed: false
-        }).addTo(context.map).addOverlay(layer, name);
-        context.map.addLayer(layer);
-    }
-};
-
-module.exports.zoomextent = function(context) {
-    zoomextent(context);
-};
-
-module.exports.clear = function(context) {
-    context.data.clear();
-};
-
-module.exports.random = function(context, count, type) {
-    context.data.mergeFeatures(geojsonRandom(count, type).features, 'meta');
-};
-
-module.exports.bboxify = function(context) {
-    context.data.set({ map: geojsonExtent.bboxify(context.data.get('map')) });
-};
-
-module.exports.flatten = function(context) {
-    context.data.set({ map: geojsonFlatten(context.data.get('map')) });
-};
-
-module.exports.polyline = function(context) {
-    var input = prompt('Enter your polyline');
-    try {
-        var decoded = polyline.toGeoJSON(input);
-        context.data.set({ map: decoded });
-    } catch(e) {
-        alert('Sorry, we were unable to decode that polyline');
-    }
-};
-
-module.exports.wkxBase64 = function(context) {
-    var input = prompt('Enter your Base64 encoded WKB/EWKB');
-    try {
-        var decoded = wkx.Geometry.parse(Buffer.from(input,'base64'));
-        context.data.set({ map: decoded.toGeoJSON() });
-        zoomextent(context);
-    } catch(e) {
-        console.error(e);
-        alert('Sorry, we were unable to decode that Base64 encoded WKX data');
-    }
-};
-
-module.exports.wkxHex = function(context) {
-    var input = prompt('Enter your Hex encoded WKB/EWKB');
-    try {
-        var decoded = wkx.Geometry.parse(Buffer.from(input,'hex'));
-        context.data.set({ map: decoded.toGeoJSON() });
-        zoomextent(context);
-    } catch(e) {
-        console.error(e);
-        alert('Sorry, we were unable to decode that Hex encoded WKX data');
-    }
-};
-
-module.exports.wkxString = function(context) {
-    var input = prompt('Enter your WKT/EWKT String');
-    try {
-        var decoded = wkx.Geometry.parse(input);
-        context.data.set({ map: decoded.toGeoJSON() });
-        zoomextent(context);
-    } catch(e) {
-        console.error(e);
-        alert('Sorry, we were unable to decode that WKT data');
-    }
-};
-
-}).call(this)}).call(this,require("buffer").Buffer)
-},{"../lib/zoomextent":157,"buffer":180,"escape-html":13,"geojson-extent":20,"geojson-flatten":21,"geojson-random":23,"polyline":75,"wkx":140}],154:[function(require,module,exports){
-module.exports = function(context) {
-    return function(e) {
-        var sel = d3.select(e.popup._contentNode);
-
-        sel.selectAll('.cancel')
-            .on('click', clickClose);
-
-        sel.selectAll('.save')
-            .on('click', saveFeature);
-
-        sel.selectAll('.add')
-            .on('click', addRow);
-
-        sel.selectAll('.delete-invert')
-            .on('click', removeFeature);
-
-        function clickClose() {
-            context.map.closePopup(e.popup);
-        }
-
-        function removeFeature() {
-            if (e.popup._source && context.mapLayer.hasLayer(e.popup._source)) {
-                context.mapLayer.removeLayer(e.popup._source);
-                context.data.set({map: context.mapLayer.toGeoJSON()}, 'popup');
-            }
-        }
-
-        function losslessNumber(x) {
-            var fl = parseFloat(x);
-            if (fl.toString() === x) return fl;
-            else return x;
-        }
-
-        function saveFeature() {
-            var obj = {};
-            var table = sel.select('table.marker-properties');
-            table.selectAll('tr').each(collectRow);
-            function collectRow() {
-                if (d3.select(this).selectAll('input')[0][0].value) {
-                    obj[d3.select(this).selectAll('input')[0][0].value] =
-                        losslessNumber(d3.select(this).selectAll('input')[0][1].value);
-                }
-            }
-            e.popup._source.feature.properties = obj;
-            context.data.set({map: context.mapLayer.toGeoJSON()}, 'popup');
-            context.map.closePopup(e.popup);
-        }
-
-        function addRow() {
-            var tr = sel.select('table.marker-properties tbody')
-                .append('tr');
-
-            tr.append('th')
-                .append('input')
-                .attr('type', 'text');
-
-            tr.append('td')
-                .append('input')
-                .attr('type', 'text');
-        }
-    };
-};
-
-},{}],155:[function(require,module,exports){
-var topojson = require('topojson'),
-    toGeoJSON = require('togeojson'),
-    gtfs2geojson = require('gtfs2geojson'),
-    csv2geojson = require('csv2geojson'),
-    osmtogeojson = require('osmtogeojson'),
-    polytogeojson = require('polytogeojson'),
-    geojsonNormalize = require('geojson-normalize');
-
-module.exports.readDrop = readDrop;
-module.exports.readAsText = readAsText;
-module.exports.readFile = readFile;
-
-function readDrop(callback) {
-    return function() {
-        var results = [];
-        var errors = [];
-        var warnings = [];
-        if (d3.event.dataTransfer && d3.event.dataTransfer &&
-           d3.event.dataTransfer.files && d3.event.dataTransfer.files.length) {
-            d3.event.stopPropagation();
-            d3.event.preventDefault();
-            var remaining = d3.event.dataTransfer.files.length;
-            [].forEach.call(d3.event.dataTransfer.files, function(f) {
-                readAsText(f, function(err, text) {
-                    if (err) {
-                        errors.push(err);
-                        if (!--remaining) finish(errors, results);
-                    } else {
-                        readFile(f, text, function(err, res, war) {
-                            if (err) errors.push(err);
-                            if (res) results.push(res);
-                            if (war) results.push(war);
-                            if (!--remaining) finish(errors, results, war);
-                        });
-                    }
-                });
-            });
-        } else {
-            return callback({
-                message: 'No files were dropped'
-            });
-        }
-
-        function finish(errors, results, war) {
-            // if no conversions suceeded, return the first error
-            if (!results.length && errors.length) return callback(errors[0], null, war);
-            // otherwise combine results
-            return callback(null, {
-                type: 'FeatureCollection',
-                features: results.reduce(function(memo, r) {
-                    r = geojsonNormalize(r);
-                    if (r) {
-                        memo = memo.concat(r.features);
-                    }
-                    return memo;
-                }, [])
-            }, war);
-        }
-    };
-}
-
-function readAsText(f, callback) {
-    try {
-        var reader = new FileReader();
-        reader.readAsText(f);
-        reader.onload = function(e) {
-            if (e.target && e.target.result) callback(null, e.target.result);
-            else callback({
-                message: 'Dropped file could not be loaded'
-            });
-        };
-        reader.onerror = function(e) {
-            callback({
-                message: 'Dropped file was unreadable'
-            });
-        };
-    } catch (e) {
-        callback({
-            message: 'Dropped file was unreadable'
-        });
-    }
-}
-
-function readFile(f, text, callback) {
-
-    var fileType = detectType(f, text);
-
-    if (!fileType) {
-        var filename = f.name ? f.name.toLowerCase() : '',
-            pts = filename.split('.');
-        return callback({
-            message: 'Could not detect file type'
-        });
-    } else if (fileType === 'kml') {
-        var kmldom = toDom(text);
-        if (!kmldom) {
-            return callback({
-                message: 'Invalid KML file: not valid XML'
-            });
-        }
-        var warning;
-        if (kmldom.getElementsByTagName('NetworkLink').length) {
-            warning = {
-                message: 'The KML file you uploaded included NetworkLinks: some content may not display. ' +
-                  'Please export and upload KML without NetworkLinks for optimal performance'
-            };
-        }
-        callback(null, toGeoJSON.kml(kmldom), warning);
-    } else if (fileType === 'xml') {
-        var xmldom = toDom(text),
-            result;
-        if (!xmldom) {
-            return callback({
-                message: 'Invalid XML file: not valid XML'
-            });
-        }
-        result = osmtogeojson.toGeojson(xmldom);
-        // only keep object tags as properties
-        result.features.forEach(function(feature) {
-            feature.properties = feature.properties.tags;
-        });
-        callback(null, result);
-    } else if (fileType === 'gpx') {
-        callback(null, toGeoJSON.gpx(toDom(text)));
-    } else if (fileType === 'geojson') {
-        try {
-            var gj = JSON.parse(text);
-            if (gj && gj.type === 'Topology' && gj.objects) {
-                var collection = { type: 'FeatureCollection', features: [] };
-                for (var o in gj.objects) {
-                    var ft = topojson.feature(gj, gj.objects[o]);
-                    if (ft.features) collection.features = collection.features.concat(ft.features);
-                    else collection.features = collection.features.concat([ft]);
-                }
-                return callback(null, collection);
-            } else {
-                return callback(null, gj);
-            }
-        } catch(err) {
-            alert('Invalid JSON file: ' + err);
-            return;
-        }
-    } else if (fileType === 'dsv') {
-        csv2geojson.csv2geojson(text, {
-            delimiter: 'auto'
-        }, function(err, result) {
-            if (err) {
-                return callback({
-                    type: 'geocode',
-                    result: result,
-                    raw: text
-                });
-            } else {
-                return callback(null, result);
-            }
-        });
-    } else if (fileType === 'gtfs') {
-        try {
-            return callback(null, gtfs2geojson(text));
-        } catch(e) {
-            return callback({ message: 'Invalid GTFS file' });
-        }
-    } else if (fileType === 'poly') {
-        callback(null, polytogeojson(text));
-    }
-
-    function toDom(x) {
-        return (new DOMParser()).parseFromString(x, 'text/xml');
-    }
-
-    function detectType(f, text) {
-        var filename = f.name ? f.name.toLowerCase() : '';
-        function ext(_) {
-            return filename.indexOf(_) !== -1;
-        }
-        if (f.type === 'application/vnd.google-earth.kml+xml' || ext('.kml')) {
-            return 'kml';
-        }
-        if (ext('.gpx')) return 'gpx';
-        if (ext('.geojson') || ext('.json') || ext('.topojson')) return 'geojson';
-        if (f.type === 'text/csv' || ext('.csv') || ext('.tsv') || ext('.dsv')) {
-            return 'dsv';
-        }
-        if (ext('.xml') || ext('.osm')) return 'xml';
-        if (ext('.poly')) return 'poly';
-        if (text && text.indexOf('shape_id,shape_pt_lat,shape_pt_lon') != -1) {
-          return 'gtfs';
-        }
-    }
-}
-
-},{"csv2geojson":5,"geojson-normalize":22,"gtfs2geojson":28,"osmtogeojson":56,"polytogeojson":76,"togeojson":93,"topojson":"topojson"}],156:[function(require,module,exports){
-var geojsonhint = require('geojsonhint');
-
-module.exports = function(callback) {
-    return function(editor, changeObj) {
-
-        var err = geojsonhint.hint(editor.getValue());
-        editor.clearGutter('error');
-
-        if (err instanceof Error) {
-            handleError(err.message);
-            return callback({
-                'class': 'icon-circle-blank',
-                title: 'invalid JSON',
-                message: 'invalid JSON'});
-        } else if (err.length) {
-            handleErrors(err);
-            return callback({
-                'class': 'icon-circle-blank',
-                title: 'invalid GeoJSON',
-                message: 'invalid GeoJSON'});
-        } else {
-            var zoom = changeObj.from.ch === 0 &&
-                changeObj.from.line === 0 &&
-                changeObj.origin == 'paste';
-
-            var gj = JSON.parse(editor.getValue());
-
-            try {
-                return callback(null, gj, zoom);
-            } catch(e) {
-                return callback({
-                    'class': 'icon-circle-blank',
-                    title: 'invalid GeoJSON',
-                    message: 'invalid GeoJSON'});
-            }
-        }
-
-        function handleError(msg) {
-            var match = msg.match(/line (\d+)/);
-            if (match && match[1]) {
-                editor.clearGutter('error');
-                editor.setGutterMarker(parseInt(match[1], 10) - 1, 'error', makeMarker(msg));
-            }
-        }
-
-        function handleErrors(errors) {
-            editor.clearGutter('error');
-            errors.forEach(function(e) {
-                editor.setGutterMarker(e.line, 'error', makeMarker(e.message));
-            });
-        }
-
-        function makeMarker(msg) {
-            return d3.select(document.createElement('div'))
-                .attr('class', 'error-marker')
-                .attr('message', msg).node();
-        }
-    };
-};
-
-},{"geojsonhint":27}],157:[function(require,module,exports){
-module.exports = function(context) {
-    var bounds = context.mapLayer.getBounds();
-    if (bounds.isValid()) context.map.fitBounds(bounds);
-};
-
-},{}],158:[function(require,module,exports){
-(function (Buffer){(function (){
-
-var marked = require('marked');
-
-module.exports = function(context) {
-    var html = Buffer("PGgyPkhlbHA8L2gyPg0KDQo8cD5OZXcgaGVyZT8gPHN0cm9uZz5nZW9qc29uLmlvPC9zdHJvbmc+IGlzIGEgcXVpY2ssIHNpbXBsZSB0b29sIGZvciBjcmVhdGluZywNCnZpZXdpbmcsIGFuZCBzaGFyaW5nIG1hcHMuIGdlb2pzb24uaW8gaXMgbmFtZWQgYWZ0ZXIgPGEgaHJlZj0naHR0cDovL2dlb2pzb24ub3JnLycgdGFyZ2V0PSdfYmxhbmsnPkdlb0pTT048L2E+LA0KYW4gb3BlbiBzb3VyY2UgZGF0YSBmb3JtYXQsIGFuZCBpdCBzdXBwb3J0cyBHZW9KU09OIGluIGFsbCB3YXlzIC0gYnV0IGFsc28NCmFjY2VwdHMgS01MLCBHUFgsIENTViwgR1RGUywgVG9wb0pTT04sIGFuZCBvdGhlciBmb3JtYXRzLjwvcD4NCg0KPHA+TmVlZCBleHRyYSBoZWxwIG9yIHNlZSBhIGJ1Zz8gPGEgdGFyZ2V0PSdfYmxhbmsnIGhyZWY9J2h0dHBzOi8vZ2l0aHViLmNvbS9tYXBib3gvZ2VvanNvbi5pby9pc3N1ZXM/c3RhdGU9b3Blbic+T3BlbiBhbiBpc3N1ZQ0KICAgIG9uIGdlb2pzb24uaW8ncyBpc3N1ZSB0cmFja2VyLjwvYT4NCg0KPGgzPkkndmUgZ290IGRhdGE8L2gzPg0KDQo8cD5JZiB5b3UgaGF2ZSBkYXRhLCBsaWtlIGEgS01MLCBHZW9KU09OLCBvciBDU1YgZmlsZSwganVzdCBkcmFnICZhbXA7IGRyb3ANCml0IG9udG8gdGhlIHBhZ2Ugb3IgY2xpY2sgJ09wZW4nIGFuZCAnRmlsZScgLSB5b3VyIGRhdGEgc2hvdWxkIGFwcGVhciBvbg0KdGhlIG1hcCE8L3A+DQoNCjxoMz5JIHdhbnQgdG8gZHJhdyBmZWF0dXJlczwvaDM+DQoNCjxwPkNsaWNrIHRoZSBkcmF3aW5nIHRvb2xzIG9uIHRoZSBsZWZ0LWhhbmQgc2lkZSB0byBkcmF3IHBvaW50cywgcG9seWdvbnMsDQpsaW5lcyBhbmQgcmVjdGFuZ2xlcy4gQWZ0ZXIgeW91J3JlIGRvbmUgZHJhd2luZyB0aGUgc2hhcGVzLCB5b3UgY2FuIGFkZA0KaW5mb3JtYXRpb24gdG8gZWFjaCBmZWF0dXJlIGJ5IGNsaWNraW5nIG9uIGl0LCBlZGl0aW5nIHRoZSBmZWF0dXJlJ3MgcHJvcGVydGllcywNCmFuZCBjbGlja2luZyAnU2F2ZScuPC9wPg0KDQo8cD5Qcm9wZXJ0aWVzIGluIEdlb0pTT04gYXJlIHN0b3JlZCBhcyAna2V5IHZhbHVlIHBhaXJzJyAtIHNvLCBmb3IgaW5zdGFuY2UsDQppZiB5b3Ugd2FudGVkIHRvIGFkZCBhIG5hbWUgdG8gZWFjaCBmZWF0dXJlLCB0eXBlICduYW1lJyBpbiB0aGUgZmlyc3QgdGFibGUNCmZpZWxkLCBhbmQgdGhlIG5hbWUgb2YgdGhlIGZlYXR1cmUgaW4gdGhlIHNlY29uZC48L3A+DQoNCjxoMz5JIHdhbnQgdG8gdXNlIG15IG1hcCBldmVyeXdoZXJlPC9oMz4NCg0KPHA+WW91IGNhbiBzaGFyZSBtYXBzIGluIHF1aXRlIGEgZmV3IHdheXMhIElmIHlvdSBzYXZlIHlvdXIgbWFwIGhlcmUsIHRoZSBVUkwNCm9mIHRoaXMgcGFnZSB3aWxsIHVwZGF0ZSBhbmQgeW91IGNhbiBsaW5rIHNlbmQgZnJpZW5kcyB0aGUgbGluayB0byBzaGFyZQ0KdGhlIG1hcCwgb3IgeW91IGNhbiBjbGljayAnRG93bmxvYWQnIHRvIGdyYWIgdGhlIHJhdyBHZW9KU09OIGRhdGEgYW5kIHVzZQ0KaXQgaW4gb3RoZXIgc29mdHdhcmUsIGxpa2UgVGlsZU1pbGwgb3IgTGVhZmxldC48L3A+DQoNCjxoMz5JJ20gYSBjb2RlcjwvaDM+DQoNCjxwPjxhIGhyZWY9JyNnZW9qc29uLWlvLWFwaSc+Z2VvanNvbi5pbyBoYXMgYW4gYXJyYXkgb2YgY2xpIHRvb2xzPC9hPg0KdGhhdCBtYWtlIGl0IGVhc3kgdG8gZ28gZnJvbSBhIEdlb0pTT04gZmlsZSBvbiB5b3VyIGNvbXB1dGVyIHRvIGdlb2pzb24uaW8uDQoNCjxoMz5Qcm90aXBzPzwvaDM+DQoNCjx1bD4NCiAgICA8bGk+PHN0cm9uZz5jbWQrczwvc3Ryb25nPjogc2F2ZSBtYXAgdG8gZ2l0aHViIGdpc3RzDQogICAgPGxpPjxzdHJvbmc+Y21kK2E8L3N0cm9uZz46IGRvd25sb2FkIG1hcCBhcyBnZW9qc29uDQogICAgPGxpPjxzdHJvbmc+YXJyb3cga2V5czwvc3Ryb25nPjogbmF2aWdhdGUgdGhlIG1hcA0KPC91bD4NCg0KPGgzPlByaXZhY3kgJmFtcDsgTGljZW5zZSBJc3N1ZXM8L2gzPg0KDQo8dWw+DQogICAgPGxpPjxzdHJvbmc+Q2xpY2tpbmcgc2F2ZTwvc3Ryb25nPiBieSBkZWZhdWx0IHNhdmVzIHRvIGEgcHJpdmF0ZQ0KICAgIEdpdEh1YiBHaXN0IC0gc28gaXQgd2lsbCBvbmx5IGJlIGFjY2Vzc2libGUgdG8gcGVvcGxlIHlvdSBzaGFyZSB0aGUgVVJMDQogICAgd2l0aCwgYW5kIGNyZWF0aW5nIGl0IHdvbid0IGFwcGVhciBpbiB5b3VyIEdpdEh1YiB0aW1lbGluZS4NCiAgICA8bGk+PHN0cm9uZz5UaGUgZGF0YSB5b3UgY3JlYXRlIGFuZCBtb2RpZnkgaW4gZ2VvanNvbi5pbzwvc3Ryb25nPiBkb2Vzbid0DQogICAgYWNxdWlyZSBhbnkgYWRkaXRpb25hbCBsaWNlbnNlOiBpZiBpdCdzIHNlY3JldCBhbmQgY29weXJpZ2h0ZWQsIGl0IHdpbGwgcmVtYWluDQogICAgdGhhdCB3YXkgLSBpdCBkb2Vzbid0IGhhdmUgdG8gYmUgcHVibGljIG9yIG9wZW4gc291cmNlLg0KPC91bD4NCg==","base64") +
-        '<br><hr><br>' +
-        marked("## Geojson.io API\r\nYou can interact with geojson.io programmatically in two ways:\r\n\r\n* [URL parameters](#url-api)\r\n* [Browser console](#console-api)\r\n* [Protips](#protips)\r\n\r\n## URL API\r\nYou can do a few interesting things with just URLs and geojson.io. Here are the\r\ncurrent URL formats.\r\n\r\n### `map`\r\n\r\nOpen the map at a specific location. The argument is numbers separated by `/`\r\nin the form `zoom/latitude/longitude`.\r\n\r\n#### Example:\r\n\r\nhttp://geojson.io/#map=2/20.0/0.0\r\n\r\n\r\n### `data=data:application/json,`\r\n\r\nOpen the map and load a chunk of [GeoJSON](http://geojson.org/) data from a\r\nURL segment directly onto the map. The GeoJSON data should be encoded\r\nas per `encodeURIComponent(JSON.stringify(geojson_data))`.\r\n\r\n#### Example:\r\n\r\nhttp://geojson.io/#data=data:application/json,%7B%22type%22%3A%22LineString%22%2C%22coordinates%22%3A%5B%5B0%2C0%5D%2C%5B10%2C10%5D%5D%7D\r\n\r\n\r\n### `data=data:text/x-url,`\r\n\r\nLoad GeoJSON data from a URL on the internet onto the map. The URL must\r\nrefer directly to a resource that is:\r\n\r\n* Freely accessible (not behind a password)\r\n* Supports [CORS](http://en.wikipedia.org/wiki/Cross-origin_resource_sharing)\r\n* Is valid GeoJSON\r\n\r\nThe URL should be encoded as per `encodeURIComponent(url)`.\r\n\r\n#### Example:\r\n\r\nhttp://geojson.io/#data=data:text/x-url,http%3A%2F%2Fapi.tiles.mapbox.com%2Fv3%2Ftmcw.map-gdv4cswo%2Fmarkers.geojson\r\n\r\n\r\n### `id=gist:`\r\n\r\nLoad GeoJSON data from a [GitHub Gist](https://gist.github.com/), given an argument\r\nin the form of `login/gistid`. The Gist can be public or private, and must\r\ncontain a file with a `.geojson` extension that is valid GeoJSON.\r\n\r\n#### Example:\r\n\r\nhttp://geojson.io/#id=gist:tmcw/e9a29ad54dbaa83dee08&map=8/39.198/-76.981\r\n\r\n\r\n### `id=github:`\r\n\r\nLoad a file from a GitHub repository. You must have access to the file, and\r\nit must be valid GeoJSON.\r\n\r\nThe url is in the form:\r\n\r\n    login/repository/blob/branch/filepath\r\n\r\n#### Example:\r\n\r\nhttp://geojson.io/#id=github:benbalter/dc-wifi-social/blob/master/bars.geojson&map=14/38.9140/-77.0302\r\n\r\n## Console API\r\n\r\n[Pop open your browser console](http://debugbrowser.com/) and see the beautiful\r\nexamples: geojson.io has started to expose a subset of its inner workings for\r\nyou to mess around with:\r\n\r\n\r\n### `window.api.map`\r\n\r\nThe [Leaflet](http://leafletjs.com/) map that you see and use on the site. See\r\nthe [Leaflet API](http://leafletjs.com/reference.html) for all the things you\r\ncan do with it.\r\n\r\nFor instance, you could add another map layer:\r\n\r\n```js\r\nwindow.api.map.addLayer(L.tileLayer('http://tile.stamen.com/watercolor/{z}/{x}/{y}.jpg'))\r\n```\r\n\r\n### `window.api.data`\r\n\r\nThe data model. See the [code to get an idea of how it works](https://github.com/mapbox/geojson.io/blob/gh-pages/src/core/data.js#L48-L90) -\r\nyou'll want to use stuff like `data.set({ map: { .. your geojson map information .. })`\r\nand `data.get('map')` and `data.mergeFeatures([arrayoffeatures])` to do your\r\ndirty business.\r\n\r\n## `window.api.mapLayer`\r\n\r\nThis is the Leaflet featureGroup that gets filled with features as you draw\r\nthem. You can operate on this directly to do advanced stuff like\r\nselecting a feature with its id:\r\n\r\n```js\r\nvar layers = [];\r\nwindow.api.mapLayer.eachLayer(l => { layers.push(l); });\r\nlayers.find(l => l.feature.id == 'a').openPopup();\r\n```\r\n\r\nThat example uses [arrow functions](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/Arrow_functions)\r\nwhich are supported in Chrome & Firefox.\r\n\r\n## `window.api.drawControl`\r\n\r\nExposes the [Leaflet.Draw](https://github.com/Leaflet/Leaflet.draw) control\r\ninstance in the console.\r\n\r\n## `window.api.on(event, fn)`\r\n\r\nExposes d3 events, including `change`.\r\n\r\n## Protips\r\n\r\nTo include `turf` from [turf](https://github.com/turfjs/turf) so you can manipulate features\r\nwith its GIS features, run this in the CLI, which will download the script and evaluate it.\r\n\r\n```js\r\nfetch('https://npmcdn.com/@turf/turf@3.1.1/turf.js').then(t => t.text()).then(eval)\r\n```\r\n");
-    function render(selection) {
-        var area = selection
-            .html('')
-            .append('div')
-            .attr('class', 'pad2 prose')
-            .html(html);
-    }
-
-    render.off = function() {
-    };
-
-    return render;
-};
-
-}).call(this)}).call(this,require("buffer").Buffer)
-},{"buffer":180,"marked":55}],159:[function(require,module,exports){
-var validate = require('../lib/validate'),
-    zoomextent = require('../lib/zoomextent'),
-    saver = require('../ui/saver.js');
-
-module.exports = function(context) {
-
-    CodeMirror.keyMap.tabSpace = {
-        Tab: function(cm) {
-            var spaces = new Array(cm.getOption('indentUnit') + 1).join(' ');
-            cm.replaceSelection(spaces, 'end', '+input');
-        },
-        'Ctrl-S': saveAction,
-        'Cmd-S': saveAction,
-        fallthrough: ['default']
-    };
-
-    function saveAction() {
-        saver(context);
-        return false;
-    }
-
-    function render(selection) {
-        var textarea = selection
-            .html('')
-            .append('textarea');
-
-        var editor = CodeMirror.fromTextArea(textarea.node(), {
-            mode: 'application/json',
-            matchBrackets: true,
-            tabSize: 2,
-            gutters: ['error'],
-            theme: 'eclipse',
-            autofocus: (window === window.top),
-            keyMap: 'tabSpace',
-            lineNumbers: true
-        });
-
-        editor.on('change', validate(changeValidated));
-
-        function changeValidated(err, data, zoom) {
-            if (!err) {
-              context.data.set({map: data}, 'json');
-              if (zoom) zoomextent(context);
-            }
-        }
-
-        context.dispatch.on('change.json', function(event) {
-            if (event.source !== 'json') {
-                var scrollInfo = editor.getScrollInfo();
-                editor.setValue(JSON.stringify(context.data.get('map'), null, 2));
-                editor.scrollTo(scrollInfo.left, scrollInfo.top);
-            }
-        });
-
-        editor.setValue(JSON.stringify(context.data.get('map'), null, 2));
-    }
-
-    render.off = function() {
-        context.dispatch.on('change.json', null);
-    };
-
-    return render;
-};
-
-},{"../lib/validate":156,"../lib/zoomextent":157,"../ui/saver.js":173}],160:[function(require,module,exports){
-// var metatable = require('d3-metatable')(d3),
-//     smartZoom = require('../lib/smartzoom.js');
-
-// module.exports = function(context) {
-//     function render(selection) {
-
-//         selection.html('');
-
-//         function rerender() {
-//             var geojson = context.data.get('map');
-//             var props;
-
-//             if (!geojson || !geojson.geometry &&
-//                 (!geojson.features || !geojson.features.length)) {
-//                 selection
-//                     .html('')
-//                     .append('div')
-//                     .attr('class', 'blank-banner center')
-//                     .text('no features');
-//             } else {
-//                 props = geojson.geometry ? [geojson.properties] :
-//                     geojson.features.map(getProperties);
-//                 selection.select('.blank-banner').remove();
-//                 selection
-//                     .data([props])
-//                     .call(metatable()
-//                         .on('change', function(row, i) {
-//                             var geojson = context.data.get('map');
-//                             if (geojson.geometry) {
-//                                 geojson.properties = row;
-//                             } else {
-//                                 geojson.features[i].properties = row;
-//                             }
-//                             context.data.set('map', geojson);
-//                         })
-//                         .on('rowfocus', function(row, i) {
-//                             var bounds = context.mapLayer.getBounds();
-//                             var j = 0;
-//                             context.mapLayer.eachLayer(function(l) {
-//                                 if (i === j++) smartZoom(context.map, l, bounds);
-//                             });
-//                         })
-//                     );
-//             }
-
-//         }
-
-//         context.dispatch.on('change.table', function(evt) {
-//             rerender();
-//         });
-
-//         rerender();
-
-//         function getProperties(f) { return f.properties; }
-
-//         function zoomToMap(p) {
-//             var layer;
-//             // layers.eachLayer(function(l) {
-//             //     if (p == l.feature.properties) layer = l;
-//             // });
-//             return layer;
-//         }
-//     }
-
-//     render.off = function() {
-//         context.dispatch.on('change.table', null);
-//     };
-
-//     return render;
-// };
-
-},{}],161:[function(require,module,exports){
-
-var tmpl = "<!DOCTYPE html>\r\n<html>\r\n<head>\r\n  <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' />\r\n  <style>\r\n  body { margin:0; padding:0; }\r\n  #map { position:absolute; top:0; bottom:0; width:100%; }\r\n  .marker-properties {\r\n    border-collapse:collapse;\r\n    font-size:11px;\r\n    border:1px solid #eee;\r\n    margin:0;\r\n}\r\n.marker-properties th {\r\n    white-space:nowrap;\r\n    border:1px solid #eee;\r\n    padding:5px 10px;\r\n}\r\n.marker-properties td {\r\n    border:1px solid #eee;\r\n    padding:5px 10px;\r\n}\r\n.marker-properties tr:last-child td,\r\n.marker-properties tr:last-child th {\r\n    border-bottom:none;\r\n}\r\n.marker-properties tr:nth-child(even) th,\r\n.marker-properties tr:nth-child(even) td {\r\n    background-color:#f7f7f7;\r\n}\r\n  </style>\r\n  <script src='//api.tiles.mapbox.com/mapbox.js/v2.2.2/mapbox.js'></script>\r\n  <script src='//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js' ></script>\r\n  <link href='//api.tiles.mapbox.com/mapbox.js/v2.2.2/mapbox.css' rel='stylesheet' />\r\n</head>\r\n<body>\r\n<div id='map'></div>\r\n<script type='text/javascript'>\r\nL.mapbox.accessToken = 'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXFhYTA2bTMyeW44ZG0ybXBkMHkifQ.gUGbDOPUN1v1fTs5SeOR4A';\r\nvar map = L.mapbox.map('map');\r\n\r\nL.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/256/{z}/{x}/{y}?access_token=' + L.mapbox.accessToken).addTo(map);\r\n\r\n$.getJSON('map.geojson', function(geojson) {\r\n    var geojsonLayer = L.mapbox.featureLayer(geojson).addTo(map);\r\n    var bounds = geojsonLayer.getBounds();\r\n    if (bounds.isValid()) {\r\n        map.fitBounds(geojsonLayer.getBounds());\r\n    } else {\r\n        map.setView([0, 0], 2);\r\n    }\r\n    geojsonLayer.eachLayer(function(l) {\r\n        showProperties(l);\r\n    });\r\n});\r\n\r\nfunction showProperties(l) {\r\n    var properties = l.toGeoJSON().properties;\r\n    var table = document.createElement('table');\r\n    table.setAttribute('class', 'marker-properties display')\r\n    for (var key in properties) {\r\n        var tr = createTableRows(key, properties[key]);\r\n        table.appendChild(tr);\r\n    }\r\n    if (table) l.bindPopup(table);\r\n}\r\n\r\nfunction createTableRows(key, value) {\r\n    var tr = document.createElement('tr');\r\n    var th = document.createElement('th');\r\n    var td = document.createElement('td');\r\n    key = document.createTextNode(key);\r\n    value = document.createTextNode(value);\r\n    th.appendChild(key);\r\n    td.appendChild(value);\r\n    tr.appendChild(th);\r\n    tr.appendChild(td);\r\n    return tr\r\n}\r\n\r\n</script>\r\n</body>\r\n</html>\r\n";
-
-var config = require('../config.js')(location.hostname);
-var githubBase = config.GithubAPI ? config.GithubAPI + '/api/v3': 'https://api.github.com';
-
-module.exports.save = save;
-module.exports.saveBlocks = saveBlocks;
-module.exports.load = load;
-module.exports.loadRaw = loadRaw;
-
-function saveBlocks(content, callback) {
-    d3.json(githubBase + '/gists')
-        .on('load', function(data) {
-            callback(null, data);
-        })
-        .on('error', function(err) {
-            var message,
-                url = /(http:\/\/\S*)/g;
-
-            message = JSON.parse(err.responseText).message
-                .replace(url, '<a href="$&">$&</a>');
-
-            callback(message);
-        })
-        .send('POST', JSON.stringify({
-            description: 'via:geojson.io',
-            public: false,
-            files: {
-                'index.html': { content: tmpl },
-                'map.geojson': { content: JSON.stringify(content) }
-            }
-        }));
-}
-
-function save(context, callback) {
-
-    var source = context.data.get('source'),
-        meta = context.data.get('meta'),
-        name = (meta && meta.name) || 'map.geojson',
-        map = context.data.get('map');
-
-    // var description = (source && source.description) || 'via:geojson.io',
-    //     public = source ? !!source.public : false;
-
-    context.user.details(onuser);
-
-    function onuser(err, user) {
-        var method = 'POST',
-            source = context.data.get('source'),
-            files = {};
-        var endpoint = githubBase + '/gists';
-
-        if (!err && user && user.login && meta &&
-            // check that it's not previously a github
-            source && source.id &&
-            // and it is mine
-            meta.login && user.login === meta.login) {
-            endpoint += '/' + source.id;
-            method = 'PATCH';
-        } else if (!err && source && source.id) {
-            endpoint += '/' + source.id + '/forks';
-        }
-
-        files[name] = {
-            content: JSON.stringify(map, null, 2)
-        };
-
-        context.user.signXHR(d3.json(endpoint))
-            .on('load', function(data) {
-                data.type = 'gist';
-                callback(null, data);
-            })
-            .on('error', function(err) {
-                var message,
-                    url = /(http:\/\/\S*)/g;
-
-                try {
-                    message = JSON.parse(err.responseText).message
-                        .replace(url, '<a href="$&">$&</a>');
-                } catch(e) {
-                    message = 'Sorry, an error occurred';
-                }
-
-                callback(message);
-            })
-            .send(method, JSON.stringify({
-                files: files
-            }));
-    }
-}
-
-function load(id, context, callback) {
-    var endpoint = githubBase + '/gists/';
-    context.user.signXHR(d3.json(endpoint + id))
-        .on('load', onLoad)
-        .on('error', onError)
-        .get();
-
-    function onLoad(json) { callback(null, json); }
-    function onError(err) { callback(err, null); }
-}
-
-function loadRaw(url, context, callback) {
-    context.user.signXHR(d3.text(url))
-        .on('load', onLoad)
-        .on('error', onError)
-        .get();
-
-    function onLoad(file) { callback(null, file); }
-    function onError(err) { callback(err, null); }
-}
-
-},{"../config.js":143}],162:[function(require,module,exports){
-module.exports.save = save;
-module.exports.load = load;
-module.exports.loadRaw = loadRaw;
-
-var config = require('../config.js')(location.hostname);
-var githubBase = config.GithubAPI ? config.GithubAPI + '/api/v3': 'https://api.github.com';
-
-function save(context, callback) {
-    var source = context.data.get('source'),
-        meta = context.data.get('meta'),
-        newpath = context.data.get('newpath'),
-        name = (meta && meta.name) || 'map.geojson',
-        map = context.data.get('map');
-
-    if (navigator.appVersion.indexOf('MSIE 9') !== -1 || !window.XMLHttpRequest) {
-        return alert('Sorry, saving and sharing is not supported in IE9 and lower. ' +
-            'Please use a modern browser to enjoy the full featureset of geojson.io');
-    }
-
-    if (!localStorage.github_token) {
-        return alert('You need to log in with GitHub to commit changes');
-    }
-
-    context.repo.details(onrepo);
-
-    function onrepo(err, repo) {
-        var commitMessage,
-            endpoint,
-            method = 'POST',
-            files = {};
-
-        if (!err && repo.permissions.push) {
-            commitMessage = context.commitMessage || prompt('Commit message:');
-            if (!commitMessage) return;
-
-            endpoint = source.url;
-            method = 'PUT';
-            var data = {
-                message: commitMessage,
-                branch: meta.branch,
-                content: btoa(encodeURIComponent(JSON.stringify(map, null, 2)).replace(/%([0-9A-F]{2})/g, function(match, p1) { return String.fromCharCode('0x' + p1); }))
-            };
-
-            // creating a file
-            if (newpath) {
-                data.path = newpath;
-                context.data.set({ newpath: null });
-            }
-
-            // updating a file
-            if (source.sha) {
-                data.sha = source.sha;
-            }
-        } else {
-            endpoint = githubBase + '/gists';
-            files[name] = { content: JSON.stringify(map, null, 2) };
-            data = { files: files };
-        }
-
-        context.user.signXHR(d3.json(endpoint))
-            .on('load', function(data) {
-                callback(null, data);
-            })
-            .on('error', function(err) {
-                var message,
-                    url = /(http:\/\/\S*)/g;
-
-                try {
-                    message = JSON.parse(err.responseText).message
-                        .replace(url, '<a href="$&">$&</a>');
-                } catch(e) {
-                    message = 'Sorry, an error occurred.';
-                }
-
-                callback(message);
-            })
-            .send(method, JSON.stringify(data));
-    }
-}
-
-function parseGitHubId(id) {
-    var parts = id.split('/');
-    return {
-        user: parts[0],
-        repo: parts[1],
-        mode: parts[2],
-        branch: parts[3],
-        file: parts.slice(4).join('/')
-    };
-}
-
-function load(parts, context, callback) {
-    context.user.signXHR(d3.json(fileUrl(parts)))
-        .on('load', onLoad)
-        .on('error', onError)
-        .get();
-
-    function onLoad(file) {
-        callback(null, file);
-    }
-    function onError(err) { callback(err, null); }
-}
-
-function loadRaw(parts, sha, context, callback) {
-    context.user.signXHR(d3.text(shaUrl(parts, sha)))
-        .on('load', onLoad)
-        .on('error', onError)
-        .header('Accept', 'application/vnd.github.raw')
-        .get();
-
-    function onLoad(file) {
-        callback(null, file);
-    }
-    function onError(err) { callback(err, null); }
-}
-
-function fileUrl(parts) {
-    return githubBase + '/repos/' +
-        parts.user +
-        '/' + parts.repo +
-        '/contents/' + parts.path +
-        '?ref=' + parts.branch;
-}
-
-function shaUrl(parts, sha) {
-    return githubBase + '/repos/' +
-        parts.user +
-        '/' + parts.repo +
-        '/git/blobs/' + sha;
-}
-
-},{"../config.js":143}],163:[function(require,module,exports){
-try {
-    
-} catch(e) {
-    console.warn(e);
-}
-
-module.exports.save = save;
-
-function save(context, callback) {
-
-    var path = context.data.get('path'),
-        map = context.data.get('map');
-
-    var content = JSON.stringify(map, null, 2);
-
-    fs.writeFile(path, content, function(err, res) {
-        callback(null, {
-            type: 'local',
-            path: path,
-            content: map
-        });
-    });
-}
-
-},{}],164:[function(require,module,exports){
-var buttons = require('./ui/mode_buttons'),
-    file_bar = require('./ui/file_bar'),
-    dnd = require('./ui/dnd'),
-    userUi = require('./ui/user'),
-    layer_switch = require('./ui/layer_switch');
-
-module.exports = ui;
-
-function ui(context) {
-    function init(selection) {
-
-        var container = selection
-            .append('div')
-            .attr('class', 'container');
-
-        var map = container
-            .append('div')
-            .attr('class', 'map')
-            .call(context.map)
-            .call(layer_switch(context));
-
-        context.container = container;
-
-        return container;
-    }
-
-    function render(selection) {
-
-        var container = init(selection);
-
-        var right = container
-            .append('div')
-            .attr('class', 'right');
-
-        var top = right
-            .append('div')
-            .attr('class', 'top');
-
-        top
-            .append('button')
-            .attr('class', 'collapse-button')
-            .attr('title', 'Collapse')
-            .on('click', function collapse() {
-                d3.select('body').classed('fullscreen',
-                    !d3.select('body').classed('fullscreen'));
-                var full = d3.select('body').classed('fullscreen');
-                d3.select(this)
-                    .select('.icon')
-                    .classed('icon-caret-up', !full)
-                    .classed('icon-caret-down', full);
-                context.map.invalidateSize();
-            })
-            .append('class', 'span')
-            .attr('class', 'icon icon-caret-up');
-
-        var pane = right
-            .append('div')
-            .attr('class', 'pane');
-
-        top
-            .append('div')
-            .attr('class', 'user fr pad1 deemphasize')
-            .call(userUi(context));
-
-        top
-            .append('div')
-            .attr('class', 'buttons')
-            .call(buttons(context, pane));
-
-        container
-            .append('div')
-            .attr('class', 'file-bar')
-            .call(file_bar(context));
-
-        dnd(context);
-    }
-
-
-    return {
-        read: init,
-        write: render
-    };
-}
-
-},{"./ui/dnd":165,"./ui/file_bar":166,"./ui/layer_switch":168,"./ui/mode_buttons":172,"./ui/user":175}],165:[function(require,module,exports){
-var readDrop = require('../lib/readfile.js').readDrop,
-    flash = require('./flash.js'),
-    zoomextent = require('../lib/zoomextent');
-
-module.exports = function(context) {
-    d3.select('body')
-        .attr('dropzone', 'copy')
-        .on('drop.import', readDrop(function(err, gj, warning) {
-            if (err && err.message) {
-                flash(context.container, err.message)
-                    .classed('error', 'true');
-            }
-            if (gj && gj.features) {
-                context.data.mergeFeatures(gj.features);
-                if (warning) {
-                    flash(context.container, warning.message);
-                } else {
-                    flash(context.container, 'Imported ' + gj.features.length + ' features.')
-                        .classed('success', 'true');
-                }
-                zoomextent(context);
-            }
-            d3.select('body').classed('dragover', false);
-        }))
-        .on('dragenter.import', over)
-        .on('dragleave.import', exit)
-        .on('dragover.import', over);
-
-   function over() {
-        d3.event.stopPropagation();
-        d3.event.preventDefault();
-        d3.event.dataTransfer.dropEffect = 'copy';
-        d3.select('body').classed('dragover', true);
-    }
-
-    function exit() {
-        d3.event.stopPropagation();
-        d3.event.preventDefault();
-        d3.event.dataTransfer.dropEffect = 'copy';
-        d3.select('body').classed('dragover', false);
-    }
-};
-
-},{"../lib/readfile.js":155,"../lib/zoomextent":157,"./flash.js":167}],166:[function(require,module,exports){
-var shpwrite = require('shp-write'),
-    clone = require('clone'),
-    geojson2dsv = require('geojson2dsv'),
-    topojson = require('topojson'),
-    saveAs = require('filesaver.js'),
-    tokml = require('tokml'),
-    // githubBrowser = require('@mapbox/github-file-browser'),
-    gistBrowser = require('@mapbox/gist-map-browser'),
-    geojsonNormalize = require('geojson-normalize'),
-    wellknown = require('wellknown');
-
-var share = require('./share'),
-    modal = require('./modal.js'),
-    flash = require('./flash'),
-    zoomextent = require('../lib/zoomextent'),
-    readFile = require('../lib/readfile'),
-    meta = require('../lib/meta.js'),
-    saver = require('../ui/saver.js'),
-    config = require('../config.js')(location.hostname);
-
-/**
- * This module provides the file picking & status bar above the map interface.
- * It dispatches to source implementations that interface with specific
- * sources, like GitHub.
- */
-module.exports = function fileBar(context) {
-
-    var shpSupport = typeof ArrayBuffer !== 'undefined';
-    var mapboxAPI = /a\.tiles\.mapbox.com/.test(L.mapbox.config.HTTP_URL);
-    var githubAPI = !!config.GithubAPI;
-    var githubBase = githubAPI ? config.GithubAPI + '/api/v3': 'https://api.github.com';
-
-    var exportFormats = [{
-        title: 'GeoJSON',
-        action: downloadGeoJSON
-    }, {
-        title: 'TopoJSON',
-        action: downloadTopo
-    }, {
-        title: 'CSV',
-        action: downloadDSV
-    }, {
-        title: 'KML',
-        action: downloadKML
-    }, {
-        title: 'WKT',
-        action: downloadWKT
-    }];
-
-    if (shpSupport) {
-        exportFormats.push({
-            title: 'Shapefile',
-            action: downloadShp
-        });
-    }
-
-    function bar(selection) {
-
-        var actions = [{
-            title: 'Save',
-            action: (mapboxAPI || githubAPI) ? saveAction : function() {},
-            children: exportFormats
-        }, {
-            title: 'New',
-            action: function() {
-                window.open(window.location.origin +
-                    window.location.pathname + '#new');
-            }
-        }, {
-            title: 'Meta',
-            action: function() {},
-            children: [
-                {
-                    title: 'Add map layer',
-                    alt: 'Add a custom tile layer',
-                    action: function() {
-                        var layerURL = prompt('Layer URL \n(http://tile.stamen.com/watercolor/{z}/{x}/{y}.jpg)');
-                        if (layerURL === null) return;
-                        var layerName = prompt('Layer name');
-                        if (layerName === null) return;
-                        meta.adduserlayer(context, layerURL, layerName);
-                    }
-                },
-                {
-                    title: 'Zoom to features',
-                    alt: 'Zoom to the extent of all features',
-                    action: function() {
-                        meta.zoomextent(context);
-                    }
-                },
-                {
-                    title: 'Clear',
-                    alt: 'Delete all features from the map',
-                    action: function() {
-                        if (confirm('Are you sure you want to delete all features from this map?')) {
-                            meta.clear(context);
-                        }
-                    }
-                }, {
-                    title: 'Random: Points',
-                    alt: 'Add random points to your map',
-                    action: function() {
-                        var response = prompt('Number of points (default: 100)');
-                        if (response === null) return;
-                        var count = parseInt(response, 10);
-                        if (isNaN(count)) count = 100;
-                        meta.random(context, count, 'point');
-                    }
-                }, {
-                    title: 'Add bboxes',
-                    alt: 'Add bounding box members to all applicable GeoJSON objects',
-                    action: function() {
-                        meta.bboxify(context);
-                    }
-                }, {
-                    title: 'Flatten Multi Features',
-                    alt: 'Flatten MultiPolygons, MultiLines, and GeometryCollections into simple geometries',
-                    action: function() {
-                        meta.flatten(context);
-                    }
-                }, {
-                    title: 'Load encoded polyline',
-                    alt: 'Decode and show an encoded polyline. Precision 5 is supported.',
-                    action: function() {
-                        meta.polyline(context);
-                    }
-                }, {
-                    title: 'Load WKB Base64 Encoded String',
-                    alt: 'Decode and show WKX data',
-                    action: function() {
-                        meta.wkxBase64(context);
-                    }
-                }, {
-                    title: 'Load WKB Hex Encoded String',
-                    alt: 'Decode and show WKX data',
-                    action: function() {
-                        meta.wkxHex(context);
-                    }
-                }, {
-                    title: 'Load WKT String',
-                    alt: 'Decode and show WKX data',
-                    action: function() {
-                        meta.wkxString(context);
-                    }
-                }
-            ]
-        }];
-
-        if (mapboxAPI || githubAPI) {
-            actions.unshift({
-                title: 'Open',
-                children: [
-                    {
-                        title: 'File',
-                        alt: 'GeoJSON, TopoJSON, GTFS, KML, CSV, GPX and OSM XML supported',
-                        action: blindImport
-                    }, {
-                        title: 'GitHub',
-                        alt: 'GeoJSON files in GitHub Repositories',
-                        authenticated: true,
-                        action: clickGitHubOpen
-                    }, {
-                        title: 'Gist',
-                        alt: 'GeoJSON files in GitHub Gists',
-                        authenticated: true,
-                        action: clickGist
-                    }
-                ]
-            });
-            actions[1].children.unshift({
-                    title: 'GitHub',
-                    alt: 'GeoJSON files in GitHub Repositories',
-                    authenticated: true,
-                    action: clickGitHubSave
-                }, {
-                    title: 'Gist',
-                    alt: 'GeoJSON files in GitHub Gists',
-                    authenticated: true,
-                    action: clickGistSave
-                });
-
-            if (mapboxAPI) actions.splice(3, 0, {
-                    title: 'Share',
-                    action: function() {
-                        context.container.call(share(context));
-                    }
-                });
-        } else {
-            actions.unshift({
-                title: 'Open',
-                alt: 'CSV, GTFS, KML, GPX, and other filetypes',
-                action: blindImport
-            });
-        }
-
-        var items = selection.append('div')
-            .attr('class', 'inline')
-            .selectAll('div.item')
-            .data(actions)
-            .enter()
-            .append('div')
-            .attr('class', 'item');
-
-        var buttons = items.append('a')
-            .attr('class', 'parent')
-            .on('click', function(d) {
-                if (d.action) d.action.apply(this, d);
-            })
-            .text(function(d) {
-                return ' ' + d.title;
-            });
-
-        items.each(function(d) {
-            if (!d.children) return;
-            d3.select(this)
-                .append('div')
-                .attr('class', 'children')
-                .call(submenu(d.children));
-        });
-
-        var name = selection.append('div')
-            .attr('class', 'name');
-
-        if (mapboxAPI || githubAPI) {
-            var filetype = name.append('a')
-                .attr('target', '_blank')
-                .attr('class', 'icon-file-alt');
-
-            var filename = name.append('span')
-                .attr('class', 'filename')
-                .text('unsaved');
-        }
-
-        function clickGistSave() {
-            if (d3.event) d3.event.preventDefault();
-            context.data.set({ type: 'gist' });
-            saver(context);
-        }
-
-        function saveAction() {
-            if (d3.event) d3.event.preventDefault();
-            saver(context);
-        }
-
-        function sourceIcon(type) {
-            if (type == 'github') return 'icon-github';
-            else if (type == 'gist') return 'icon-github-alt';
-            else return 'icon-file-alt';
-        }
-
-        function saveNoun(_) {
-            buttons.filter(function(b) {
-                return b.title === 'Save';
-            }).select('span.title').text(_);
-        }
-
-        function submenu(children) {
-            return function(selection) {
-                selection
-                    .selectAll('a')
-                    .data(children)
-                    .enter()
-                    .append('a')
-                    .attr('title', function(d) {
-                        if (d.title == 'File' || d.title == 'GitHub' || d.title == 'Gist' || d.title == 'Add map layer' || d.title == 'Zoom to features' || d.title == 'Clear' || d.title == 'Random: Points' || d.title == 'Add bboxes' || d.title == 'Flatten Multi Features') return d.alt;
-                    })
-                    .text(function(d) {
-                        return d.title;
-                    })
-                    .on('click', function(d) {
-                        d.action.apply(this, d);
-                    });
-            };
-        }
-
-        context.dispatch.on('change.filebar', onchange);
-
-        function clickGitHubOpen() {
-            // if (!context.user.token()) return flash(context.container, 'You must authenticate to use this API.');
-
-            // var m = modal(d3.select('div.geojsonio'));
-
-            // m.select('.m')
-            //     .attr('class', 'modal-splash modal col6');
-
-            // m.select('.content')
-            //     .append('div')
-            //     .attr('class', 'header pad2 fillD')
-            //     .append('h1')
-            //     .text('GitHub');
-
-            // githubBrowser(context.user.token(), false, githubBase)
-            //     .open()
-            //     .onclick(function(d) {
-            //         if (!d || !d.length) return;
-            //         var last = d[d.length - 1];
-            //         if (!last.path) {
-            //             throw new Error('last is invalid: ' + JSON.stringify(last));
-            //         }
-            //         if (!last.path.match(/\.(geo)?json/i)) {
-            //             return alert('only GeoJSON files are supported from GitHub');
-            //         }
-            //         if (last.type === 'blob') {
-            //             githubBrowser.request('/repos/' + d[1].full_name +
-            //                 '/git/blobs/' + last.sha, function(err, blob) {
-            //                     d.content = JSON.parse(decodeURIComponent(Array.prototype.map.call(atob(blob[0].content), function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')));
-            //                     context.data.parse(d);
-            //                     zoomextent(context);
-            //                     m.close();
-            //                 });
-            //         }
-            //     })
-            //     .appendTo(
-            //         m.select('.content')
-            //             .append('div')
-            //             .attr('class', 'repos pad2')
-            //             .node());
-        }
-
-        function clickGitHubSave() {
-            if (!context.user.token()) return flash(context.container, 'You must authenticate to use this API.');
-
-            var m = modal(d3.select('div.geojsonio'));
-
-            m.select('.m')
-                .attr('class', 'modal-splash modal col6');
-
-            m.select('.content')
-                .append('div')
-                .attr('class', 'header pad2 fillD')
-                .append('h1')
-                .text('GitHub');
-
-            githubBrowser(context.user.token(), true, githubBase)
-                .open()
-                .onclick(function(d) {
-                    if (!d || !d.length) return;
-                    var last = d[d.length - 1];
-                    var pathparts;
-                    var partial;
-
-                    // New file
-                    if (last.type === 'new')  {
-                        var filename = prompt('New file name');
-                        if (!filename) {
-                            m.close();
-                            return;
-                        }
-                        pathparts = d.slice(3);
-                        pathparts.pop();
-                        pathparts.push({ path: filename });
-                        partial = pathparts.map(function(p) {
-                            return p.path;
-                        }).join('/');
-                        context.data.set({
-                            source: {
-                                url: githubBase + '/repos/' +
-                                    d[0].login + '/' + d[1].name +
-                                        '/contents/' + partial +
-                                        '?ref=' + d[2].name
-                            },
-                            type: 'github',
-                            meta: {
-                                branch: d[2].name,
-                                login: d[0].login,
-                                repo: d[1].name
-                            }
-                        });
-                        context.data.set({ newpath: partial + filename });
-                        m.close();
-                        saver(context);
-                    }
-                    // Update a file
-                    else if (last.type === 'blob') {
-                        // Build the path
-                        pathparts = d.slice(3);
-                        partial = pathparts.map(function(p) {
-                            return p.path;
-                        }).join('/');
-
-
-                        context.data.set(
-                        {
-                            source: {
-                                url: githubBase + '/repos/' +
-                                    d[0].login + '/' + d[1].name +
-                                        '/contents/' + partial +
-                                        '?ref=' + d[2].name,
-                                sha: last.sha
-                            },
-                            type: 'github',
-                            meta: {
-                                branch: d[2].name,
-                                login: d[0].login,
-                                repo: d[1].name
-                            }
-                        });
-                        m.close();
-                        saver(context);
-                    }
-                })
-                .appendTo(
-                    m.select('.content')
-                        .append('div')
-                        .attr('class', 'repos pad2')
-                        .node());
-        }
-
-        function clickGist() {
-            if (!context.user.token()) return flash(context.container, 'You must authenticate to use this API.');
-
-            var m = modal(d3.select('div.geojsonio'));
-
-            m.select('.m')
-                .attr('class', 'modal-splash modal col6');
-
-            gistBrowser(context.user.token(), githubBase)
-                .open()
-                .onclick(function(d) {
-                    context.data.parse(d);
-                    zoomextent(context);
-                    m.close();
-                })
-                .appendTo(
-                    m.select('.content')
-                        .append('div')
-                        .attr('class', 'repos pad2')
-                        .node());
-        }
-
-        function onchange(d) {
-            var data = d.obj,
-                type = data.type,
-                path = data.path;
-            if (mapboxAPI || githubAPI) filename
-                .text(path ? path : 'unsaved')
-                .classed('deemphasize', context.data.dirty);
-            if (mapboxAPI || githubAPI) filetype
-                .attr('href', data.url)
-                .attr('class', sourceIcon(type));
-            saveNoun(type == 'github' ? 'Commit' : 'Save');
-        }
-
-        function blindImport() {
-            var put = d3.select('body')
-                .append('input')
-                .attr('type', 'file')
-                .style('visibility', 'hidden')
-                .style('position', 'absolute')
-                .style('height', '0')
-                .on('change', function() {
-                    var files = this.files;
-                    if (!(files && files[0])) return;
-                    readFile.readAsText(files[0], function(err, text) {
-                        readFile.readFile(files[0], text, onImport);
-                        if (files[0].path) {
-                            context.data.set({
-                                path: files[0].path
-                            });
-                        }
-                    });
-                    put.remove();
-                });
-            put.node().click();
-        }
-
-        function onImport(err, gj, warning) {
-            gj = geojsonNormalize(gj);
-            if (gj) {
-                context.data.mergeFeatures(gj.features);
-                if (warning) {
-                    flash(context.container, warning.message);
-                } else {
-                    flash(context.container, 'Imported ' + gj.features.length + ' features.')
-                        .classed('success', 'true');
-                }
-                zoomextent(context);
-            }
-        }
-
-        d3.select(document).call(
-            d3.keybinding('file_bar')
-                .on('⌘+o', function() {
-                    blindImport();
-                    d3.event.preventDefault();
-                })
-                .on('⌘+s', saveAction));
-    }
-
-    function downloadTopo() {
-        var content = JSON.stringify(topojson.topology({
-            collection: clone(context.data.get('map'))
-        }, {'property-transform': allProperties}));
-
-        saveAs(new Blob([content], {
-            type: 'text/plain;charset=utf-8'
-        }), 'map.topojson');
-
-    }
-
-    function downloadGeoJSON() {
-        if (d3.event) d3.event.preventDefault();
-        var content = JSON.stringify(context.data.get('map'));
-        var meta = context.data.get('meta');
-        saveAs(new Blob([content], {
-            type: 'text/plain;charset=utf-8'
-        }), (meta && meta.name) || 'map.geojson');
-    }
-
-    function downloadDSV() {
-        if (d3.event) d3.event.preventDefault();
-        var content = geojson2dsv(context.data.get('map'));
-        saveAs(new Blob([content], {
-            type: 'text/plain;charset=utf-8'
-        }), 'points.csv');
-    }
-
-    function downloadKML() {
-        if (d3.event) d3.event.preventDefault();
-        var content = tokml(context.data.get('map'));
-        var meta = context.data.get('meta');
-        saveAs(new Blob([content], {
-            type: 'text/plain;charset=utf-8'
-        }), 'map.kml');
-    }
-
-    function downloadShp() {
-        if (d3.event) d3.event.preventDefault();
-        d3.select('.map').classed('loading', true);
-        try {
-            shpwrite.download(context.data.get('map'));
-        } finally {
-            d3.select('.map').classed('loading', false);
-        }
-    }
-
-    function downloadWKT() {
-        if (d3.event) d3.event.preventDefault();
-        var contentArray = [];
-        var features = context.data.get('map').features;
-        if (features.length === 0) return;
-        var content = features.map(wellknown.stringify).join('\n');
-        var meta = context.data.get('meta');
-        saveAs(new Blob([content], {
-            type: 'text/plain;charset=utf-8'
-        }), 'map.wkt');
-    }
-
-    function allProperties(properties, key, value) {
-        properties[key] = value;
-        return true;
-    }
-
-    return bar;
-};
-
-},{"../config.js":143,"../lib/meta.js":153,"../lib/readfile":155,"../lib/zoomextent":157,"../ui/saver.js":173,"./flash":167,"./modal.js":171,"./share":174,"@mapbox/gist-map-browser":2,"clone":4,"filesaver.js":15,"geojson-normalize":22,"geojson2dsv":26,"shp-write":79,"tokml":94,"topojson":"topojson","wellknown":126}],167:[function(require,module,exports){
-var message = require('./message');
-
-module.exports = flash;
-
-function flash(selection, txt) {
-    'use strict';
-
-    var msg = message(selection);
-
-    if (txt) msg.select('.content').html(txt);
-
-    setTimeout(function() {
-        msg
-            .transition()
-            .style('opacity', 0)
-            .remove();
-    }, 5000);
-
-    return msg;
-}
-
-},{"./message":170}],168:[function(require,module,exports){
-module.exports = function(context) {
-
-    return function(selection) {
-        var layers;
-
-        if (!(/a\.tiles\.mapbox.com/).test(L.mapbox.config.HTTP_URL)) {
-            layers = [{
-                title: 'Mapbox',
-                layer: L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/256/{z}/{x}/{y}?access_token=' + L.mapbox.accessToken, {maxZoom: 22, attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="http://osm.org/copyright">OpenStreetMap</a>'})
-            }, {
-                title: 'Mapbox Outdoors',
-                layer: L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/outdoors-v11/tiles/256/{z}/{x}/{y}?access_token=' + L.mapbox.accessToken, {maxZoom: 22,  attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="http://osm.org/copyright">OpenStreetMap</a>'})
-            }, {
-                title: 'Satellite',
-                layer: L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/256/{z}/{x}/{y}?access_token=' + L.mapbox.accessToken, {maxZoom: 22, attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.maxar.com/">Maxar</a>'})
-            }];
-
-        } else {
-            layers = [{
-                title: 'Mapbox',
-                layer: L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/256/{z}/{x}/{y}?access_token=' + L.mapbox.accessToken, {maxZoom: 22, attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="http://osm.org/copyright">OpenStreetMap</a>'})
-            }, {
-                title: 'Satellite',
-                layer: L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/256/{z}/{x}/{y}?access_token=' + L.mapbox.accessToken, {maxZoom: 22, attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.maxar.com/">Maxar</a>'})
-            }, {
-                title: 'OSM',
-                layer: L.tileLayer('https://a.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a>'
-                })
-            }
-            // OCM tiles from Thunderforest require an API key. Add your key and uncomment the lines
-            // below to enable the OCM layer.
-            //
-            // , {
-            //    title: 'OCM',
-            //    layer: L.tileLayer('https://a.tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=<insert-your-apikey-here>', {
-            //       attribution: 'Maps &copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, Data &copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
-            //    })
-            // }
-            ];
-        }
-
-        var layerSwap = function(d) {
-            var clicked = this instanceof d3.selection ? this.node() : this;
-            layerButtons.classed('active', function() {
-                return clicked === this;
-            });
-            layers.forEach(swap);
-            function swap(l) {
-                var datum = d instanceof d3.selection ? d.datum() : d;
-                if (l.layer == datum.layer) context.map.addLayer(datum.layer);
-                else if (context.map.hasLayer(l.layer)) context.map.removeLayer(l.layer);
-            }
-        };
-
-        var layerButtons = selection.append('div')
-            .attr('class', 'layer-switch')
-            .selectAll('button')
-            .data(layers)
-            .enter()
-            .append('button')
-            .attr('class', 'pad0x')
-            .on('click', layerSwap)
-            .text(function(d) { return d.title; });
-
-        layerButtons.filter(function(d, i) { return i === 0; }).call(layerSwap);
-
-    };
-};
-
-},{}],169:[function(require,module,exports){
-require('qs-hash');
-require('../lib/custom_hash.js');
-
-var popup = require('../lib/popup'),
-    escape = require('escape-html'),
-    LGeo = require('leaflet-geodesy'),
-    geojsonRewind = require('geojson-rewind'),
-    writable = false,
-    showStyle = true,
-    makiValues = require('../../data/maki.json'),
-    maki = '';
-
-for (var i = 0; i < makiValues.length; i++) {
-    maki += '<option value="' + makiValues[i].icon + '">';
-}
-
-module.exports = function(context, readonly) {
-
-    writable = !readonly;
-
-    function map(selection) {
-        context.map = L.mapbox.map(selection.node(), null)
-            .setView([20, 0], 2)
-            .addControl(L.mapbox.geocoderControl('mapbox.places', {
-                position: 'topright'
-            }));
-
-        L.control.scale().setPosition('bottomright').addTo(context.map);
-        context.map.zoomControl.setPosition('topright');
-
-        L.hash(context.map);
-
-        context.mapLayer = L.featureGroup().addTo(context.map);
-
-        if (writable) {
-          context.drawControl = new L.Control.Draw({
-              position: 'topright',
-              edit: { featureGroup: context.mapLayer },
-              draw: {
-                  circle: false,
-                  polyline: { metric: (navigator.language !== 'en-us' && navigator.language !== 'en-US') },
-                  polygon: { metric: (navigator.language !== 'en-us' && navigator.language !== 'en-US') },
-                  marker: {
-                      icon: L.mapbox.marker.icon({})
-                  }
-              }
-          }).addTo(context.map);
-
-          context.map
-            .on('draw:edited', update)
-            .on('draw:deleted', update);
-        }
-
-        context.map
-            .on('draw:created', created)
-            .on('popupopen', popup(context));
-
-        context.map.attributionControl.setPrefix('<a target="_blank" href="http://geojson.io/about.html">About</a>');
-
-        function update() {
-            var geojson = context.mapLayer.toGeoJSON();
-            geojson = geojsonRewind(geojson);
-            geojsonToLayer(geojson, context.mapLayer);
-            context.data.set({map: layerToGeoJSON(context.mapLayer)}, 'map');
-        }
-
-        context.dispatch.on('change.map', function() {
-            geojsonToLayer(context.data.get('map'), context.mapLayer);
-        });
-
-        function created(e) {
-            context.mapLayer.addLayer(e.layer);
-            update();
-        }
-    }
-
-    function layerToGeoJSON(layer) {
-        var features = [];
-        layer.eachLayer(collect);
-        function collect(l) { if ('toGeoJSON' in l) features.push(l.toGeoJSON()); }
-        return {
-            type: 'FeatureCollection',
-            features: features
-        };
-    }
-
-    return map;
-};
-
-function geojsonToLayer(geojson, layer) {
-    layer.clearLayers();
-    L.geoJson(geojson, {
-        style: L.mapbox.simplestyle.style,
-        pointToLayer: function(feature, latlon) {
-            if (!feature.properties) feature.properties = {};
-            return L.mapbox.marker.style(feature, latlon);
-        }
-    }).eachLayer(add);
-    function add(l) {
-        bindPopup(l);
-        l.addTo(layer);
-    }
-}
-
-function bindPopup(l) {
-
-    var props = JSON.parse(JSON.stringify(l.toGeoJSON().properties)),
-        table = '',
-        info = '';
-
-    var properties = {};
-
-    // Steer clear of XSS
-    for (var k in props) {
-        var e = escape(k);
-        // users don't want to see "[object Object]"
-        if (typeof props[k] === 'object') {
-          properties[e] = escape(JSON.stringify(props[k]));
-        } else {
-          properties[e] = escape(props[k]);
-        }
-    }
-
-    if (!properties) return;
-
-    if (!Object.keys(properties).length) properties = { '': '' };
-
-    if (l.feature && l.feature.geometry && writable) {
-        if (l.feature.geometry.type === 'Point' || l.feature.geometry.type === 'MultiPoint') {
-            if (!('marker-color' in properties)) {
-                table += '<tr class="style-row"><th><input type="text" value="marker-color"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                    '<td><input type="color" value="#7E7E7E"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
-            }
-            if (!('marker-size' in properties)) {
-                table += '<tr class="style-row"><th><input type="text" value="marker-size"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                    '<td><input type="text" list="marker-size" value="medium"' + (!writable ? ' readonly' : '') + ' /><datalist id="marker-size"><option value="small"><option value="medium"><option value="large"></datalist></td></tr>';
-            }
-            if (!('marker-symbol' in properties)) {
-                table += '<tr class="style-row"><th><input type="text" value="marker-symbol"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                    '<td><input type="text" list="marker-symbol" value=""' + (!writable ? ' readonly' : '') + ' /><datalist id="marker-symbol">' + maki + '</datalist></td></tr>';
-            }
-        }
-        if (l.feature.geometry.type === 'LineString' || l.feature.geometry.type === 'MultiLineString' || l.feature.geometry.type === 'Polygon' || l.feature.geometry.type === 'MultiPolygon') {
-            if (!('stroke' in properties)) {
-                table += '<tr class="style-row"><th><input type="text" value="stroke"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                    '<td><input type="color" value="#555555"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
-            }
-            if (!('stroke-width' in properties)) {
-                table += '<tr class="style-row"><th><input type="text" value="stroke-width"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                    '<td><input type="number" min="0" step="0.1" value="2"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
-            }
-            if (!('stroke-opacity' in properties)) {
-                table += '<tr class="style-row"><th><input type="text" value="stroke-opacity"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                    '<td><input type="number" min="0" max="1" step="0.1" value="1"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
-            }
-        }
-        if (l.feature.geometry.type === 'Polygon' || l.feature.geometry.type === 'MultiPolygon') {
-            if (!('fill' in properties)) {
-                table += '<tr class="style-row"><th><input type="text" value="fill"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                    '<td><input type="color" value="#555555"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
-            }
-            if (!('fill-opacity' in properties)) {
-                table += '<tr class="style-row"><th><input type="text" value="fill-opacity"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                    '<td><input type="number" min="0" max="1" step="0.1" value="0.5"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
-            }
-        }
-    }
-
-    for (var key in properties) {
-        if ((key == 'marker-color' || key == 'stroke' || key == 'fill') && writable) {
-            table += '<tr class="style-row"><th><input type="text" value="' + key + '"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                '<td><input type="color" value="' + properties[key] + '"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
-        }
-        else if (key == 'marker-size' && writable) {
-            table += '<tr class="style-row"><th><input type="text" value="' + key + '"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                '<td><input type="text" list="marker-size" value="' + properties[key] + '"' + (!writable ? ' readonly' : '') + ' /><datalist id="marker-size"><option value="small"><option value="medium"><option value="large"></datalist></td></tr>';
-        }
-        else if (key == 'marker-symbol' && writable) {
-            table += '<tr class="style-row"><th><input type="text" value="' + key + '"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                '<td><input type="text" list="marker-symbol" value="' + properties[key] + '"' + (!writable ? ' readonly' : '') + ' /><datalist id="marker-symbol">' + maki + '</datalist></td></tr>';
-        }
-        else if (key == 'stroke-width' && writable) {
-            table += '<tr class="style-row"><th><input type="text" value="' + key + '"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                '<td><input type="number" min="0" step="0.1" value="' + properties[key] + '"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
-        }
-        else if ((key == 'stroke-opacity' || key == 'fill-opacity') && writable) {
-            table += '<tr class="style-row"><th><input type="text" value="' + key + '"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                '<td><input type="number" min="0" max="1" step="0.1" value="' + properties[key] + '"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
-        }
-        else {
-            table += '<tr><th><input type="text" value="' + key + '"' + (!writable ? ' readonly' : '') + ' /></th>' +
-                '<td><input type="text" value="' + properties[key] + '"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
-        }
-    }
-
-    if (l.feature && l.feature.geometry) {
-        info += '<table class="metadata">';
-        if (l.feature.geometry.type === 'LineString') {
-            var total = d3.pairs(l.feature.geometry.coordinates).reduce(function(total, pair) {
-                return total + L.latLng(pair[0][1], pair[0][0])
-                    .distanceTo(L.latLng(pair[1][1], pair[1][0]));
-            }, 0);
-            info += '<tr><td>Meters</td><td>' + total.toFixed(2) + '</td></tr>' +
-                    '<tr><td>Kilometers</td><td>' + (total / 1000).toFixed(2) + '</td></tr>' +
-                    '<tr><td>Feet</td><td>' + (total / 0.3048).toFixed(2) + '</td></tr>' +
-                    '<tr><td>Yards</td><td>' + (total / 0.9144).toFixed(2) + '</td></tr>' +
-                    '<tr><td>Miles</td><td>' + (total / 1609.34).toFixed(2) + '</td></tr>';
-        } else if (l.feature.geometry.type === 'Point') {
-            info += '<tr><td>Latitude </td><td>' + l.feature.geometry.coordinates[1].toFixed(4) + '</td></tr>' +
-                    '<tr><td>Longitude</td><td>' + l.feature.geometry.coordinates[0].toFixed(4) + '</td></tr>';
-        } else if (l.feature.geometry.type === 'Polygon') {
-          info += '<tr><td>Sq. Meters</td><td>' + (LGeo.area(l)).toFixed(2) + '</td></tr>' +
-                  '<tr><td>Sq. Kilometers</td><td>' + (LGeo.area(l) / 1000000).toFixed(2) + '</td></tr>' +
-                  '<tr><td>Sq. Feet</td><td>' + (LGeo.area(l) / 0.092903).toFixed(2) + '</td></tr>' +
-                  '<tr><td>Acres</td><td>' + (LGeo.area(l) / 4046.86).toFixed(2) + '</td></tr>' +
-                  '<tr><td>Sq. Miles</td><td>' + (LGeo.area(l) / 2589990).toFixed(2) + '</td></tr>';
-        }
-        info += '</table>';
-    }
-
-    var tabs = '<div class="pad1 tabs-ui clearfix col12">' +
-                    '<div class="tab col12">' +
-                        '<input class="hide" type="radio" id="properties" name="tab-group" checked="true">' +
-                        '<label class="keyline-top keyline-right tab-toggle pad0 pin-bottomleft z10 center col6" for="properties">Properties</label>' +
-                        '<div class="space-bottom1 col12 content">' +
-                            '<table class="space-bottom0 marker-properties">' + table + '</table>' +
-                            (writable ? '<div class="add-row-button add fl col3"><span class="icon-plus"> Add row</div>' +
-                            '<div class="fl text-right col9"><input type="checkbox" id="show-style" name="show-style" value="true" checked><label for="show-style">Show style properties</label></div>' : '') +
-                        '</div>' +
-                    '</div>' +
-                    '<div class="space-bottom2 tab col12">' +
-                        '<input class="hide" type="radio" id="info" name="tab-group">' +
-                        '<label class="keyline-top tab-toggle pad0 pin-bottomright z10 center col6" for="info">Info</label>' +
-                        '<div class="space-bottom1 col12 content">' +
-                            '<div class="marker-info">' + info + ' </div>' +
-                        '</div>' +
-                    '</div>' +
-                '</div>';
-
-    var content = tabs +
-        (writable ? '<div class="clearfix col12 pad1 keyline-top">' +
-            '<div class="pill col6">' +
-            '<button class="save col6 major">Save</button> ' +
-            '<button class="minor col6 cancel">Cancel</button>' +
-            '</div>' +
-            '<button class="col6 text-right pad0 delete-invert"><span class="icon-remove-sign"></span> Delete feature</button></div>' : '');
-
-    l.bindPopup(L.popup({
-        closeButton: false,
-        maxWidth: 500,
-        maxHeight: 400,
-        autoPanPadding: [5, 45],
-        className: 'geojsonio-feature'
-    }, l).setContent(content));
-
-    l.on('popupopen', function(e){
-        if (showStyle === false) {
-            d3.select('#show-style').property('checked', false);
-              d3.selectAll('.style-row').style('display','none');
-        }
-        d3.select('#show-style').on('click', function() {
-            if (this.checked) {
-                showStyle = true;
-                d3.selectAll('.style-row').style('display','');
-            } else {
-                showStyle = false;
-                d3.selectAll('.style-row').style('display','none');
-            }
-        });
-    });
-}
-
-},{"../../data/maki.json":1,"../lib/custom_hash.js":152,"../lib/popup":154,"escape-html":13,"geojson-rewind":25,"leaflet-geodesy":53,"qs-hash":77}],170:[function(require,module,exports){
-module.exports = message;
-
-function message(selection) {
-    'use strict';
-
-    selection.select('div.message').remove();
-
-    var sel = selection.append('div')
-        .attr('class', 'message pad1');
-
-    sel.append('a')
-        .attr('class', 'icon-remove fr')
-        .on('click', function() {
-            sel.remove();
-        });
-
-    sel.append('div')
-        .attr('class', 'content');
-
-    sel
-        .style('opacity', 0)
-        .transition()
-        .duration(200)
-        .style('opacity', 1);
-
-    sel.close = function() {
-        sel
-            .transition()
-            .duration(200)
-            .style('opacity', 0)
-            .remove();
-        sel
-            .transition()
-            .duration(200)
-            .style('top', '0px');
-    };
-
-    return sel;
-}
-
-},{}],171:[function(require,module,exports){
-module.exports = function(selection, blocking) {
-
-    var previous = selection.select('div.modal');
-    var animate = previous.empty();
-
-    previous.transition()
-        .duration(200)
-        .style('opacity', 0)
-        .remove();
-
-    var shaded = selection
-        .append('div')
-        .attr('class', 'shaded')
-        .style('opacity', 0);
-
-    shaded.close = function() {
-        shaded
-            .transition()
-            .duration(200)
-            .style('opacity',0)
-            .remove();
-        modal
-            .transition()
-            .duration(200)
-            .style('top','0px');
-        keybinding.off();
-    };
-
-    var keybinding = d3.keybinding('modal')
-        .on('⌫', shaded.close)
-        .on('⎋', shaded.close);
-
-    d3.select(document).call(keybinding);
-
-    var modal = shaded.append('div')
-        .attr('class', 'modal fillL col6');
-
-        shaded.on('click.remove-modal', function() {
-            if (d3.event.target === this && !blocking) shaded.close();
-        });
-
-    modal.append('button')
-        .attr('class', 'close')
-        .on('click', function() {
-            if (!blocking) shaded.close();
-        })
-        .append('div')
-            .attr('class','icon close');
-
-    modal.append('div')
-        .attr('class', 'content');
-
-    if (animate) {
-        shaded.transition().style('opacity', 1);
-        modal
-            .style('top','0px')
-            .transition()
-            .duration(200)
-            .style('top','40px');
-    } else {
-        shaded.style('opacity', 1);
-    }
-
-
-    return shaded;
-};
-
-},{}],172:[function(require,module,exports){
-var table = require('../panel/table'),
-    json = require('../panel/json'),
-    help = require('../panel/help');
-
-module.exports = function(context, pane) {
-    return function(selection) {
-
-        var mode = null;
-
-        var buttonData = [{
-            icon: 'code',
-            title: ' JSON',
-            alt: 'JSON Source',
-            behavior: json
-        }, {
-            icon: 'table',
-            title: ' Table',
-            alt: 'Edit feature properties in a table',
-            behavior: table
-        }, {
-            icon: 'question',
-            title: ' Help',
-            alt: 'Help',
-            behavior: help
-        }];
-
-        var buttons = selection
-            .selectAll('button')
-            .data(buttonData, function(d) { return d.icon; });
-
-        var enter = buttons.enter()
-            .append('button')
-            .attr('title', function(d) { return d.alt; })
-            .on('click', buttonClick);
-        enter.append('span')
-            .attr('class', function(d) { return 'icon-' + d.icon; });
-        enter
-            .append('span')
-            .text(function(d) { return d.title; });
-
-        d3.select(buttons.node()).trigger('click');
-
-        function buttonClick(d) {
-            buttons.classed('active', function(_) { return d.icon == _.icon; });
-            if (mode) mode.off();
-            mode = d.behavior(context);
-            pane.call(mode);
-        }
-    };
-};
-
-},{"../panel/help":158,"../panel/json":159,"../panel/table":160}],173:[function(require,module,exports){
-var flash = require('./flash');
-
-module.exports = function(context) {
-    if (d3.event) d3.event.preventDefault();
-
-    function success(err, res) {
-        if (err) return flash(context.container, err.toString());
-
-        var message,
-          url,
-          path,
-          commitMessage,
-          type = context.data.get('type');
-
-        if (type === 'gist' || res.type === 'gist') {
-            // Saved as Gist
-            message = 'Changes to this map saved to Gist: ';
-            url = res.html_url;
-            path = res.id;
-        } else if (type === 'github') {
-            // Committed to GitHub
-            message = 'Changes committed to GitHub: ';
-            url = res.commit.html_url;
-            path = res.commit.sha.substring(0, 10);
-        } else {
-            // Saved as a file
-            message = 'Changes saved to disk.';
-        }
-
-        flash(context.container, message + (url ? '<a href="' + url + '">' + path + '</a>' : ''));
-
-        context.container.select('.map').classed('loading', false);
-        context.data.parse(res);
-    }
-
-    var meta = context.data.get('meta'),
-        map = context.data.get('map'),
-        features = map && map.geometry || (map.features && map.features.length),
-        type = context.data.get('type');
-
-    if (!features) {
-        return flash(context.container, 'Add a feature to the map to save it');
-    }
-
-    context.container.select('.map').classed('loading', true);
-
-    if (type === 'github') {
-        context.repo.details(onrepo);
-    } else {
-        context.data.save(success);
-    }
-
-    function onrepo(err, repo) {
-        if (!err && repo.permissions.push) {
-            var msg = prompt('Commit Message');
-            if (!msg) {
-                context.container.select('.map').classed('loading', false);
-                return;
-            }
-            context.commitMessage = msg;
-            context.data.save(success);
-        } else {
-            context.data.save(success);
-        }
-    }
-};
-
-},{"./flash":167}],174:[function(require,module,exports){
-var gist = require('../source/gist'),
-    modal = require('./modal');
-
-module.exports = share;
-
-function facebookUrl(_) {
-    return 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(_);
-}
-
-function twitterUrl(_) {
-    return 'https://twitter.com/intent/tweet?source=webclient&text=' + encodeURIComponent(_);
-}
-
-function emailUrl(_) {
-    return 'mailto:?subject=' + encodeURIComponent('My Map on geojson.io') + '&body=Here\'s the link: ' + encodeURIComponent(_);
-}
-
-function share(context) {
-    return function(selection) {
-        gist.saveBlocks(context.data.get('map'), function(err, res) {
-            var m = modal(d3.select('div.geojsonio'));
-            m.select('.m')
-                .attr('class', 'modal-splash modal col6');
-
-            var content = m.select('.content');
-
-            content.append('div')
-                .attr('class', 'header pad2 fillD')
-                .append('h1')
-                .text('Share');
-
-            if (err || !res) {
-                content
-                    .append('div')
-                    .attr('class', 'pad2')
-                    .text('Could not share: an error occurred: ' + err);
-            } else {
-                var container = content.append('div').attr('class', 'pad2');
-                var url = container.append('input')
-                    .style('width', '100%')
-                    .property('value', 'http://bl.ocks.org/d/' + res.id);
-                container.append('p')
-                    .text('URL to the full-screen map in that embed');
-            }
-        });
-    };
-}
-
-},{"../source/gist":161,"./modal":171}],175:[function(require,module,exports){
-module.exports = function(context) {
-    if (!(/a\.tiles\.mapbox\.com/).test(L.mapbox.config.HTTP_URL) && !require('../config.js')(location.hostname).GithubAPI) {
-        return function() {};
-    }
-    return function(selection) {
-        var name = selection.append('a')
-            .attr('target', '_blank');
-
-        selection.append('span').text(' | ');
-
-        var action = selection.append('a')
-            .attr('href', '#');
-
-        function nextLogin() {
-            action.text('login').on('click', login);
-            name
-                .text('anon')
-                .attr('href', '#')
-                .on('click', function() { d3.event.preventDefault(); });
-        }
-
-        function nextLogout() {
-            name.on('click', null);
-            action.text('logout').on('click', logout);
-        }
-
-        function login() {
-            d3.event.preventDefault();
-            context.user.authenticate();
-        }
-
-        function logout() {
-            d3.event.preventDefault();
-            context.user.logout();
-            nextLogin();
-        }
-
-        nextLogin();
-
-        if (context.user.token()) {
-            context.user.details(function(err, d) {
-                if (err) return;
-                name.text(d.login);
-                name.attr('href', d.html_url);
-                nextLogout();
-            });
-        }
-    };
-};
-
-},{"../config.js":143}],176:[function(require,module,exports){
-
-},{}],177:[function(require,module,exports){
-(function (global){(function (){
-'use strict';
-
-var objectAssign = require('object-assign');
-
-// compare and isBuffer taken from https://github.com/feross/buffer/blob/680e9e5e488f22aac27599a57dc844a6315928dd/index.js
-// original notice:
-
-/*!
- * The buffer module from node.js, for the browser.
- *
- * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
- * @license  MIT
- */
-function compare(a, b) {
-  if (a === b) {
-    return 0;
-  }
-
-  var x = a.length;
-  var y = b.length;
-
-  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
-    if (a[i] !== b[i]) {
-      x = a[i];
-      y = b[i];
-      break;
-    }
-  }
-
-  if (x < y) {
-    return -1;
-  }
-  if (y < x) {
-    return 1;
-  }
-  return 0;
-}
-function isBuffer(b) {
-  if (global.Buffer && typeof global.Buffer.isBuffer === 'function') {
-    return global.Buffer.isBuffer(b);
-  }
-  return !!(b != null && b._isBuffer);
-}
-
-// based on node assert, original notice:
-// NB: The URL to the CommonJS spec is kept just for tradition.
-//     node-assert has evolved a lot since then, both in API and behavior.
-
-// http://wiki.commonjs.org/wiki/Unit_Testing/1.0
-//
-// THIS IS NOT TESTED NOR LIKELY TO WORK OUTSIDE V8!
-//
-// Originally from narwhal.js (http://narwhaljs.org)
-// Copyright (c) 2009 Thomas Robinson <280north.com>
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the 'Software'), to
-// deal in the Software without restriction, including without limitation the
-// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-// sell copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
-// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-var util = require('util/');
-var hasOwn = Object.prototype.hasOwnProperty;
-var pSlice = Array.prototype.slice;
-var functionsHaveNames = (function () {
-  return function foo() {}.name === 'foo';
-}());
-function pToString (obj) {
-  return Object.prototype.toString.call(obj);
-}
-function isView(arrbuf) {
-  if (isBuffer(arrbuf)) {
-    return false;
-  }
-  if (typeof global.ArrayBuffer !== 'function') {
-    return false;
-  }
-  if (typeof ArrayBuffer.isView === 'function') {
-    return ArrayBuffer.isView(arrbuf);
-  }
-  if (!arrbuf) {
-    return false;
-  }
-  if (arrbuf instanceof DataView) {
-    return true;
-  }
-  if (arrbuf.buffer && arrbuf.buffer instanceof ArrayBuffer) {
-    return true;
-  }
-  return false;
-}
-// 1. The assert module provides functions that throw
-// AssertionError's when particular conditions are not met. The
-// assert module must conform to the following interface.
-
-var assert = module.exports = ok;
-
-// 2. The AssertionError is defined in assert.
-// new assert.AssertionError({ message: message,
-//                             actual: actual,
-//                             expected: expected })
-
-var regex = /\s*function\s+([^\(\s]*)\s*/;
-// based on https://github.com/ljharb/function.prototype.name/blob/adeeeec8bfcc6068b187d7d9fb3d5bb1d3a30899/implementation.js
-function getName(func) {
-  if (!util.isFunction(func)) {
-    return;
-  }
-  if (functionsHaveNames) {
-    return func.name;
-  }
-  var str = func.toString();
-  var match = str.match(regex);
-  return match && match[1];
-}
-assert.AssertionError = function AssertionError(options) {
-  this.name = 'AssertionError';
-  this.actual = options.actual;
-  this.expected = options.expected;
-  this.operator = options.operator;
-  if (options.message) {
-    this.message = options.message;
-    this.generatedMessage = false;
-  } else {
-    this.message = getMessage(this);
-    this.generatedMessage = true;
-  }
-  var stackStartFunction = options.stackStartFunction || fail;
-  if (Error.captureStackTrace) {
-    Error.captureStackTrace(this, stackStartFunction);
-  } else {
-    // non v8 browsers so we can have a stacktrace
-    var err = new Error();
-    if (err.stack) {
-      var out = err.stack;
-
-      // try to strip useless frames
-      var fn_name = getName(stackStartFunction);
-      var idx = out.indexOf('\n' + fn_name);
-      if (idx >= 0) {
-        // once we have located the function frame
-        // we need to strip out everything before it (and its line)
-        var next_line = out.indexOf('\n', idx + 1);
-        out = out.substring(next_line + 1);
-      }
-
-      this.stack = out;
-    }
-  }
-};
-
-// assert.AssertionError instanceof Error
-util.inherits(assert.AssertionError, Error);
-
-function truncate(s, n) {
-  if (typeof s === 'string') {
-    return s.length < n ? s : s.slice(0, n);
-  } else {
-    return s;
-  }
-}
-function inspect(something) {
-  if (functionsHaveNames || !util.isFunction(something)) {
-    return util.inspect(something);
-  }
-  var rawname = getName(something);
-  var name = rawname ? ': ' + rawname : '';
-  return '[Function' +  name + ']';
-}
-function getMessage(self) {
-  return truncate(inspect(self.actual), 128) + ' ' +
-         self.operator + ' ' +
-         truncate(inspect(self.expected), 128);
-}
-
-// At present only the three keys mentioned above are used and
-// understood by the spec. Implementations or sub modules can pass
-// other keys to the AssertionError's constructor - they will be
-// ignored.
-
-// 3. All of the following functions must throw an AssertionError
-// when a corresponding condition is not met, with a message that
-// may be undefined if not provided.  All assertion methods provide
-// both the actual and expected values to the assertion error for
-// display purposes.
-
-function fail(actual, expected, message, operator, stackStartFunction) {
-  throw new assert.AssertionError({
-    message: message,
-    actual: actual,
-    expected: expected,
-    operator: operator,
-    stackStartFunction: stackStartFunction
-  });
-}
-
-// EXTENSION! allows for well behaved errors defined elsewhere.
-assert.fail = fail;
-
-// 4. Pure assertion tests whether a value is truthy, as determined
-// by !!guard.
-// assert.ok(guard, message_opt);
-// This statement is equivalent to assert.equal(true, !!guard,
-// message_opt);. To test strictly for the value true, use
-// assert.strictEqual(true, guard, message_opt);.
-
-function ok(value, message) {
-  if (!value) fail(value, true, message, '==', assert.ok);
-}
-assert.ok = ok;
-
-// 5. The equality assertion tests shallow, coercive equality with
-// ==.
-// assert.equal(actual, expected, message_opt);
-
-assert.equal = function equal(actual, expected, message) {
-  if (actual != expected) fail(actual, expected, message, '==', assert.equal);
-};
-
-// 6. The non-equality assertion tests for whether two objects are not equal
-// with != assert.notEqual(actual, expected, message_opt);
-
-assert.notEqual = function notEqual(actual, expected, message) {
-  if (actual == expected) {
-    fail(actual, expected, message, '!=', assert.notEqual);
-  }
-};
-
-// 7. The equivalence assertion tests a deep equality relation.
-// assert.deepEqual(actual, expected, message_opt);
-
-assert.deepEqual = function deepEqual(actual, expected, message) {
-  if (!_deepEqual(actual, expected, false)) {
-    fail(actual, expected, message, 'deepEqual', assert.deepEqual);
-  }
-};
-
-assert.deepStrictEqual = function deepStrictEqual(actual, expected, message) {
-  if (!_deepEqual(actual, expected, true)) {
-    fail(actual, expected, message, 'deepStrictEqual', assert.deepStrictEqual);
-  }
-};
-
-function _deepEqual(actual, expected, strict, memos) {
-  // 7.1. All identical values are equivalent, as determined by ===.
-  if (actual === expected) {
-    return true;
-  } else if (isBuffer(actual) && isBuffer(expected)) {
-    return compare(actual, expected) === 0;
-
-  // 7.2. If the expected value is a Date object, the actual value is
-  // equivalent if it is also a Date object that refers to the same time.
-  } else if (util.isDate(actual) && util.isDate(expected)) {
-    return actual.getTime() === expected.getTime();
-
-  // 7.3 If the expected value is a RegExp object, the actual value is
-  // equivalent if it is also a RegExp object with the same source and
-  // properties (`global`, `multiline`, `lastIndex`, `ignoreCase`).
-  } else if (util.isRegExp(actual) && util.isRegExp(expected)) {
-    return actual.source === expected.source &&
-           actual.global === expected.global &&
-           actual.multiline === expected.multiline &&
-           actual.lastIndex === expected.lastIndex &&
-           actual.ignoreCase === expected.ignoreCase;
-
-  // 7.4. Other pairs that do not both pass typeof value == 'object',
-  // equivalence is determined by ==.
-  } else if ((actual === null || typeof actual !== 'object') &&
-             (expected === null || typeof expected !== 'object')) {
-    return strict ? actual === expected : actual == expected;
-
-  // If both values are instances of typed arrays, wrap their underlying
-  // ArrayBuffers in a Buffer each to increase performance
-  // This optimization requires the arrays to have the same type as checked by
-  // Object.prototype.toString (aka pToString). Never perform binary
-  // comparisons for Float*Arrays, though, since e.g. +0 === -0 but their
-  // bit patterns are not identical.
-  } else if (isView(actual) && isView(expected) &&
-             pToString(actual) === pToString(expected) &&
-             !(actual instanceof Float32Array ||
-               actual instanceof Float64Array)) {
-    return compare(new Uint8Array(actual.buffer),
-                   new Uint8Array(expected.buffer)) === 0;
-
-  // 7.5 For all other Object pairs, including Array objects, equivalence is
-  // determined by having the same number of owned properties (as verified
-  // with Object.prototype.hasOwnProperty.call), the same set of keys
-  // (although not necessarily the same order), equivalent values for every
-  // corresponding key, and an identical 'prototype' property. Note: this
-  // accounts for both named and indexed properties on Arrays.
-  } else if (isBuffer(actual) !== isBuffer(expected)) {
-    return false;
-  } else {
-    memos = memos || {actual: [], expected: []};
-
-    var actualIndex = memos.actual.indexOf(actual);
-    if (actualIndex !== -1) {
-      if (actualIndex === memos.expected.indexOf(expected)) {
-        return true;
-      }
-    }
-
-    memos.actual.push(actual);
-    memos.expected.push(expected);
-
-    return objEquiv(actual, expected, strict, memos);
-  }
-}
-
-function isArguments(object) {
-  return Object.prototype.toString.call(object) == '[object Arguments]';
-}
-
-function objEquiv(a, b, strict, actualVisitedObjects) {
-  if (a === null || a === undefined || b === null || b === undefined)
-    return false;
-  // if one is a primitive, the other must be same
-  if (util.isPrimitive(a) || util.isPrimitive(b))
-    return a === b;
-  if (strict && Object.getPrototypeOf(a) !== Object.getPrototypeOf(b))
-    return false;
-  var aIsArgs = isArguments(a);
-  var bIsArgs = isArguments(b);
-  if ((aIsArgs && !bIsArgs) || (!aIsArgs && bIsArgs))
-    return false;
-  if (aIsArgs) {
-    a = pSlice.call(a);
-    b = pSlice.call(b);
-    return _deepEqual(a, b, strict);
-  }
-  var ka = objectKeys(a);
-  var kb = objectKeys(b);
-  var key, i;
-  // having the same number of owned properties (keys incorporates
-  // hasOwnProperty)
-  if (ka.length !== kb.length)
-    return false;
-  //the same set of keys (although not necessarily the same order),
-  ka.sort();
-  kb.sort();
-  //~~~cheap key test
-  for (i = ka.length - 1; i >= 0; i--) {
-    if (ka[i] !== kb[i])
-      return false;
-  }
-  //equivalent values for every corresponding key, and
-  //~~~possibly expensive deep test
-  for (i = ka.length - 1; i >= 0; i--) {
-    key = ka[i];
-    if (!_deepEqual(a[key], b[key], strict, actualVisitedObjects))
-      return false;
-  }
-  return true;
-}
-
-// 8. The non-equivalence assertion tests for any deep inequality.
-// assert.notDeepEqual(actual, expected, message_opt);
-
-assert.notDeepEqual = function notDeepEqual(actual, expected, message) {
-  if (_deepEqual(actual, expected, false)) {
-    fail(actual, expected, message, 'notDeepEqual', assert.notDeepEqual);
-  }
-};
-
-assert.notDeepStrictEqual = notDeepStrictEqual;
-function notDeepStrictEqual(actual, expected, message) {
-  if (_deepEqual(actual, expected, true)) {
-    fail(actual, expected, message, 'notDeepStrictEqual', notDeepStrictEqual);
-  }
-}
-
-
-// 9. The strict equality assertion tests strict equality, as determined by ===.
-// assert.strictEqual(actual, expected, message_opt);
-
-assert.strictEqual = function strictEqual(actual, expected, message) {
-  if (actual !== expected) {
-    fail(actual, expected, message, '===', assert.strictEqual);
-  }
-};
-
-// 10. The strict non-equality assertion tests for strict inequality, as
-// determined by !==.  assert.notStrictEqual(actual, expected, message_opt);
-
-assert.notStrictEqual = function notStrictEqual(actual, expected, message) {
-  if (actual === expected) {
-    fail(actual, expected, message, '!==', assert.notStrictEqual);
-  }
-};
-
-function expectedException(actual, expected) {
-  if (!actual || !expected) {
-    return false;
-  }
-
-  if (Object.prototype.toString.call(expected) == '[object RegExp]') {
-    return expected.test(actual);
-  }
-
-  try {
-    if (actual instanceof expected) {
-      return true;
-    }
-  } catch (e) {
-    // Ignore.  The instanceof check doesn't work for arrow functions.
-  }
-
-  if (Error.isPrototypeOf(expected)) {
-    return false;
-  }
-
-  return expected.call({}, actual) === true;
-}
-
-function _tryBlock(block) {
-  var error;
-  try {
-    block();
-  } catch (e) {
-    error = e;
-  }
-  return error;
-}
-
-function _throws(shouldThrow, block, expected, message) {
-  var actual;
-
-  if (typeof block !== 'function') {
-    throw new TypeError('"block" argument must be a function');
-  }
-
-  if (typeof expected === 'string') {
-    message = expected;
-    expected = null;
-  }
-
-  actual = _tryBlock(block);
-
-  message = (expected && expected.name ? ' (' + expected.name + ').' : '.') +
-            (message ? ' ' + message : '.');
-
-  if (shouldThrow && !actual) {
-    fail(actual, expected, 'Missing expected exception' + message);
-  }
-
-  var userProvidedMessage = typeof message === 'string';
-  var isUnwantedException = !shouldThrow && util.isError(actual);
-  var isUnexpectedException = !shouldThrow && actual && !expected;
-
-  if ((isUnwantedException &&
-      userProvidedMessage &&
-      expectedException(actual, expected)) ||
-      isUnexpectedException) {
-    fail(actual, expected, 'Got unwanted exception' + message);
-  }
-
-  if ((shouldThrow && actual && expected &&
-      !expectedException(actual, expected)) || (!shouldThrow && actual)) {
-    throw actual;
-  }
-}
-
-// 11. Expected to throw an error:
-// assert.throws(block, Error_opt, message_opt);
-
-assert.throws = function(block, /*optional*/error, /*optional*/message) {
-  _throws(true, block, error, message);
-};
-
-// EXTENSION! This is annoying to write outside this module.
-assert.doesNotThrow = function(block, /*optional*/error, /*optional*/message) {
-  _throws(false, block, error, message);
-};
-
-assert.ifError = function(err) { if (err) throw err; };
-
-// Expose a strict only variant of assert
-function strict(value, message) {
-  if (!value) fail(value, true, message, '==', strict);
-}
-assert.strict = objectAssign(strict, assert, {
-  equal: assert.strictEqual,
-  deepEqual: assert.deepStrictEqual,
-  notEqual: assert.notStrictEqual,
-  notDeepEqual: assert.notDeepStrictEqual
-});
-assert.strict.strict = assert.strict;
-
-var objectKeys = Object.keys || function (obj) {
-  var keys = [];
-  for (var key in obj) {
-    if (hasOwn.call(obj, key)) keys.push(key);
-  }
-  return keys;
-};
-
-}).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"object-assign":185,"util/":189}],178:[function(require,module,exports){
-'use strict'
-
-exports.byteLength = byteLength
-exports.toByteArray = toByteArray
-exports.fromByteArray = fromByteArray
-
-var lookup = []
-var revLookup = []
-var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
-
-var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-for (var i = 0, len = code.length; i < len; ++i) {
-  lookup[i] = code[i]
-  revLookup[code.charCodeAt(i)] = i
-}
-
-// Support decoding URL-safe base64 strings, as Node.js does.
-// See: https://en.wikipedia.org/wiki/Base64#URL_applications
-revLookup['-'.charCodeAt(0)] = 62
-revLookup['_'.charCodeAt(0)] = 63
-
-function getLens (b64) {
-  var len = b64.length
-
-  if (len % 4 > 0) {
-    throw new Error('Invalid string. Length must be a multiple of 4')
-  }
-
-  // Trim off extra bytes after placeholder bytes are found
-  // See: https://github.com/beatgammit/base64-js/issues/42
-  var validLen = b64.indexOf('=')
-  if (validLen === -1) validLen = len
-
-  var placeHoldersLen = validLen === len
-    ? 0
-    : 4 - (validLen % 4)
-
-  return [validLen, placeHoldersLen]
-}
-
-// base64 is 4/3 + up to two characters of the original data
-function byteLength (b64) {
-  var lens = getLens(b64)
-  var validLen = lens[0]
-  var placeHoldersLen = lens[1]
-  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
-}
-
-function _byteLength (b64, validLen, placeHoldersLen) {
-  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
-}
-
-function toByteArray (b64) {
-  var tmp
-  var lens = getLens(b64)
-  var validLen = lens[0]
-  var placeHoldersLen = lens[1]
-
-  var arr = new Arr(_byteLength(b64, validLen, placeHoldersLen))
-
-  var curByte = 0
-
-  // if there are placeholders, only get up to the last complete 4 chars
-  var len = placeHoldersLen > 0
-    ? validLen - 4
-    : validLen
-
-  var i
-  for (i = 0; i < len; i += 4) {
-    tmp =
-      (revLookup[b64.charCodeAt(i)] << 18) |
-      (revLookup[b64.charCodeAt(i + 1)] << 12) |
-      (revLookup[b64.charCodeAt(i + 2)] << 6) |
-      revLookup[b64.charCodeAt(i + 3)]
-    arr[curByte++] = (tmp >> 16) & 0xFF
-    arr[curByte++] = (tmp >> 8) & 0xFF
-    arr[curByte++] = tmp & 0xFF
-  }
-
-  if (placeHoldersLen === 2) {
-    tmp =
-      (revLookup[b64.charCodeAt(i)] << 2) |
-      (revLookup[b64.charCodeAt(i + 1)] >> 4)
-    arr[curByte++] = tmp & 0xFF
-  }
-
-  if (placeHoldersLen === 1) {
-    tmp =
-      (revLookup[b64.charCodeAt(i)] << 10) |
-      (revLookup[b64.charCodeAt(i + 1)] << 4) |
-      (revLookup[b64.charCodeAt(i + 2)] >> 2)
-    arr[curByte++] = (tmp >> 8) & 0xFF
-    arr[curByte++] = tmp & 0xFF
-  }
-
-  return arr
-}
-
-function tripletToBase64 (num) {
-  return lookup[num >> 18 & 0x3F] +
-    lookup[num >> 12 & 0x3F] +
-    lookup[num >> 6 & 0x3F] +
-    lookup[num & 0x3F]
-}
-
-function encodeChunk (uint8, start, end) {
-  var tmp
-  var output = []
-  for (var i = start; i < end; i += 3) {
-    tmp =
-      ((uint8[i] << 16) & 0xFF0000) +
-      ((uint8[i + 1] << 8) & 0xFF00) +
-      (uint8[i + 2] & 0xFF)
-    output.push(tripletToBase64(tmp))
-  }
-  return output.join('')
-}
-
-function fromByteArray (uint8) {
-  var tmp
-  var len = uint8.length
-  var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
-  var parts = []
-  var maxChunkLength = 16383 // must be multiple of 3
-
-  // go through the array every three bytes, we'll deal with trailing stuff later
-  for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
-    parts.push(encodeChunk(uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)))
-  }
-
-  // pad the end with zeros, but make sure to not forget the extra bytes
-  if (extraBytes === 1) {
-    tmp = uint8[len - 1]
-    parts.push(
-      lookup[tmp >> 2] +
-      lookup[(tmp << 4) & 0x3F] +
-      '=='
-    )
-  } else if (extraBytes === 2) {
-    tmp = (uint8[len - 2] << 8) + uint8[len - 1]
-    parts.push(
-      lookup[tmp >> 10] +
-      lookup[(tmp >> 4) & 0x3F] +
-      lookup[(tmp << 2) & 0x3F] +
-      '='
-    )
-  }
-
-  return parts.join('')
-}
-
-},{}],179:[function(require,module,exports){
-arguments[4][176][0].apply(exports,arguments)
-},{"dup":176}],180:[function(require,module,exports){
-(function (Buffer){(function (){
-/*!
- * The buffer module from node.js, for the browser.
- *
- * @author   Feross Aboukhadijeh <https://feross.org>
- * @license  MIT
- */
-/* eslint-disable no-proto */
-
-'use strict'
-
-var base64 = require('base64-js')
-var ieee754 = require('ieee754')
-var customInspectSymbol =
-  (typeof Symbol === 'function' && typeof Symbol['for'] === 'function') // eslint-disable-line dot-notation
-    ? Symbol['for']('nodejs.util.inspect.custom') // eslint-disable-line dot-notation
-    : null
-
-exports.Buffer = Buffer
-exports.SlowBuffer = SlowBuffer
-exports.INSPECT_MAX_BYTES = 50
-
-var K_MAX_LENGTH = 0x7fffffff
-exports.kMaxLength = K_MAX_LENGTH
-
-/**
- * If `Buffer.TYPED_ARRAY_SUPPORT`:
- *   === true    Use Uint8Array implementation (fastest)
- *   === false   Print warning and recommend using `buffer` v4.x which has an Object
- *               implementation (most compatible, even IE6)
- *
- * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
- * Opera 11.6+, iOS 4.2+.
- *
- * We report that the browser does not support typed arrays if the are not subclassable
- * using __proto__. Firefox 4-29 lacks support for adding new properties to `Uint8Array`
- * (See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438). IE 10 lacks support
- * for __proto__ and has a buggy typed array implementation.
- */
-Buffer.TYPED_ARRAY_SUPPORT = typedArraySupport()
-
-if (!Buffer.TYPED_ARRAY_SUPPORT && typeof console !== 'undefined' &&
-    typeof console.error === 'function') {
-  console.error(
-    'This browser lacks typed array (Uint8Array) support which is required by ' +
-    '`buffer` v5.x. Use `buffer` v4.x if you require old browser support.'
-  )
-}
-
-function typedArraySupport () {
-  // Can typed array instances can be augmented?
-  try {
-    var arr = new Uint8Array(1)
-    var proto = { foo: function () { return 42 } }
-    Object.setPrototypeOf(proto, Uint8Array.prototype)
-    Object.setPrototypeOf(arr, proto)
-    return arr.foo() === 42
-  } catch (e) {
-    return false
-  }
-}
-
-Object.defineProperty(Buffer.prototype, 'parent', {
-  enumerable: true,
-  get: function () {
-    if (!Buffer.isBuffer(this)) return undefined
-    return this.buffer
-  }
-})
-
-Object.defineProperty(Buffer.prototype, 'offset', {
-  enumerable: true,
-  get: function () {
-    if (!Buffer.isBuffer(this)) return undefined
-    return this.byteOffset
-  }
-})
-
-function createBuffer (length) {
-  if (length > K_MAX_LENGTH) {
-    throw new RangeError('The value "' + length + '" is invalid for option "size"')
-  }
-  // Return an augmented `Uint8Array` instance
-  var buf = new Uint8Array(length)
-  Object.setPrototypeOf(buf, Buffer.prototype)
-  return buf
-}
-
-/**
- * The Buffer constructor returns instances of `Uint8Array` that have their
- * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
- * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
- * and the `Uint8Array` methods. Square bracket notation works as expected -- it
- * returns a single octet.
- *
- * The `Uint8Array` prototype remains unmodified.
- */
-
-function Buffer (arg, encodingOrOffset, length) {
-  // Common case.
-  if (typeof arg === 'number') {
-    if (typeof encodingOrOffset === 'string') {
-      throw new TypeError(
-        'The "string" argument must be of type string. Received type number'
-      )
-    }
-    return allocUnsafe(arg)
-  }
-  return from(arg, encodingOrOffset, length)
-}
-
-Buffer.poolSize = 8192 // not used by this implementation
-
-function from (value, encodingOrOffset, length) {
-  if (typeof value === 'string') {
-    return fromString(value, encodingOrOffset)
-  }
-
-  if (ArrayBuffer.isView(value)) {
-    return fromArrayView(value)
-  }
-
-  if (value == null) {
-    throw new TypeError(
-      'The first argument must be one of type string, Buffer, ArrayBuffer, Array, ' +
-      'or Array-like Object. Received type ' + (typeof value)
-    )
-  }
-
-  if (isInstance(value, ArrayBuffer) ||
-      (value && isInstance(value.buffer, ArrayBuffer))) {
-    return fromArrayBuffer(value, encodingOrOffset, length)
-  }
-
-  if (typeof SharedArrayBuffer !== 'undefined' &&
-      (isInstance(value, SharedArrayBuffer) ||
-      (value && isInstance(value.buffer, SharedArrayBuffer)))) {
-    return fromArrayBuffer(value, encodingOrOffset, length)
-  }
-
-  if (typeof value === 'number') {
-    throw new TypeError(
-      'The "value" argument must not be of type number. Received type number'
-    )
-  }
-
-  var valueOf = value.valueOf && value.valueOf()
-  if (valueOf != null && valueOf !== value) {
-    return Buffer.from(valueOf, encodingOrOffset, length)
-  }
-
-  var b = fromObject(value)
-  if (b) return b
-
-  if (typeof Symbol !== 'undefined' && Symbol.toPrimitive != null &&
-      typeof value[Symbol.toPrimitive] === 'function') {
-    return Buffer.from(
-      value[Symbol.toPrimitive]('string'), encodingOrOffset, length
-    )
-  }
-
-  throw new TypeError(
-    'The first argument must be one of type string, Buffer, ArrayBuffer, Array, ' +
-    'or Array-like Object. Received type ' + (typeof value)
-  )
-}
-
-/**
- * Functionally equivalent to Buffer(arg, encoding) but throws a TypeError
- * if value is a number.
- * Buffer.from(str[, encoding])
- * Buffer.from(array)
- * Buffer.from(buffer)
- * Buffer.from(arrayBuffer[, byteOffset[, length]])
- **/
-Buffer.from = function (value, encodingOrOffset, length) {
-  return from(value, encodingOrOffset, length)
-}
-
-// Note: Change prototype *after* Buffer.from is defined to workaround Chrome bug:
-// https://github.com/feross/buffer/pull/148
-Object.setPrototypeOf(Buffer.prototype, Uint8Array.prototype)
-Object.setPrototypeOf(Buffer, Uint8Array)
-
-function assertSize (size) {
-  if (typeof size !== 'number') {
-    throw new TypeError('"size" argument must be of type number')
-  } else if (size < 0) {
-    throw new RangeError('The value "' + size + '" is invalid for option "size"')
-  }
-}
-
-function alloc (size, fill, encoding) {
-  assertSize(size)
-  if (size <= 0) {
-    return createBuffer(size)
-  }
-  if (fill !== undefined) {
-    // Only pay attention to encoding if it's a string. This
-    // prevents accidentally sending in a number that would
-    // be interpreted as a start offset.
-    return typeof encoding === 'string'
-      ? createBuffer(size).fill(fill, encoding)
-      : createBuffer(size).fill(fill)
-  }
-  return createBuffer(size)
-}
-
-/**
- * Creates a new filled Buffer instance.
- * alloc(size[, fill[, encoding]])
- **/
-Buffer.alloc = function (size, fill, encoding) {
-  return alloc(size, fill, encoding)
-}
-
-function allocUnsafe (size) {
-  assertSize(size)
-  return createBuffer(size < 0 ? 0 : checked(size) | 0)
-}
-
-/**
- * Equivalent to Buffer(num), by default creates a non-zero-filled Buffer instance.
- * */
-Buffer.allocUnsafe = function (size) {
-  return allocUnsafe(size)
-}
-/**
- * Equivalent to SlowBuffer(num), by default creates a non-zero-filled Buffer instance.
- */
-Buffer.allocUnsafeSlow = function (size) {
-  return allocUnsafe(size)
-}
-
-function fromString (string, encoding) {
-  if (typeof encoding !== 'string' || encoding === '') {
-    encoding = 'utf8'
-  }
-
-  if (!Buffer.isEncoding(encoding)) {
-    throw new TypeError('Unknown encoding: ' + encoding)
-  }
-
-  var length = byteLength(string, encoding) | 0
-  var buf = createBuffer(length)
-
-  var actual = buf.write(string, encoding)
-
-  if (actual !== length) {
-    // Writing a hex string, for example, that contains invalid characters will
-    // cause everything after the first invalid character to be ignored. (e.g.
-    // 'abxxcd' will be treated as 'ab')
-    buf = buf.slice(0, actual)
-  }
-
-  return buf
-}
-
-function fromArrayLike (array) {
-  var length = array.length < 0 ? 0 : checked(array.length) | 0
-  var buf = createBuffer(length)
-  for (var i = 0; i < length; i += 1) {
-    buf[i] = array[i] & 255
-  }
-  return buf
-}
-
-function fromArrayView (arrayView) {
-  if (isInstance(arrayView, Uint8Array)) {
-    var copy = new Uint8Array(arrayView)
-    return fromArrayBuffer(copy.buffer, copy.byteOffset, copy.byteLength)
-  }
-  return fromArrayLike(arrayView)
-}
-
-function fromArrayBuffer (array, byteOffset, length) {
-  if (byteOffset < 0 || array.byteLength < byteOffset) {
-    throw new RangeError('"offset" is outside of buffer bounds')
-  }
-
-  if (array.byteLength < byteOffset + (length || 0)) {
-    throw new RangeError('"length" is outside of buffer bounds')
-  }
-
-  var buf
-  if (byteOffset === undefined && length === undefined) {
-    buf = new Uint8Array(array)
-  } else if (length === undefined) {
-    buf = new Uint8Array(array, byteOffset)
-  } else {
-    buf = new Uint8Array(array, byteOffset, length)
-  }
-
-  // Return an augmented `Uint8Array` instance
-  Object.setPrototypeOf(buf, Buffer.prototype)
-
-  return buf
-}
-
-function fromObject (obj) {
-  if (Buffer.isBuffer(obj)) {
-    var len = checked(obj.length) | 0
-    var buf = createBuffer(len)
-
-    if (buf.length === 0) {
-      return buf
-    }
-
-    obj.copy(buf, 0, 0, len)
-    return buf
-  }
-
-  if (obj.length !== undefined) {
-    if (typeof obj.length !== 'number' || numberIsNaN(obj.length)) {
-      return createBuffer(0)
-    }
-    return fromArrayLike(obj)
-  }
-
-  if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
-    return fromArrayLike(obj.data)
-  }
-}
-
-function checked (length) {
-  // Note: cannot use `length < K_MAX_LENGTH` here because that fails when
-  // length is NaN (which is otherwise coerced to zero.)
-  if (length >= K_MAX_LENGTH) {
-    throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
-                         'size: 0x' + K_MAX_LENGTH.toString(16) + ' bytes')
-  }
-  return length | 0
-}
-
-function SlowBuffer (length) {
-  if (+length != length) { // eslint-disable-line eqeqeq
-    length = 0
-  }
-  return Buffer.alloc(+length)
-}
-
-Buffer.isBuffer = function isBuffer (b) {
-  return b != null && b._isBuffer === true &&
-    b !== Buffer.prototype // so Buffer.isBuffer(Buffer.prototype) will be false
-}
-
-Buffer.compare = function compare (a, b) {
-  if (isInstance(a, Uint8Array)) a = Buffer.from(a, a.offset, a.byteLength)
-  if (isInstance(b, Uint8Array)) b = Buffer.from(b, b.offset, b.byteLength)
-  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b)) {
-    throw new TypeError(
-      'The "buf1", "buf2" arguments must be one of type Buffer or Uint8Array'
-    )
-  }
-
-  if (a === b) return 0
-
-  var x = a.length
-  var y = b.length
-
-  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
-    if (a[i] !== b[i]) {
-      x = a[i]
-      y = b[i]
-      break
-    }
-  }
-
-  if (x < y) return -1
-  if (y < x) return 1
-  return 0
-}
-
-Buffer.isEncoding = function isEncoding (encoding) {
-  switch (String(encoding).toLowerCase()) {
-    case 'hex':
-    case 'utf8':
-    case 'utf-8':
-    case 'ascii':
-    case 'latin1':
-    case 'binary':
-    case 'base64':
-    case 'ucs2':
-    case 'ucs-2':
-    case 'utf16le':
-    case 'utf-16le':
-      return true
-    default:
-      return false
-  }
-}
-
-Buffer.concat = function concat (list, length) {
-  if (!Array.isArray(list)) {
-    throw new TypeError('"list" argument must be an Array of Buffers')
-  }
-
-  if (list.length === 0) {
-    return Buffer.alloc(0)
-  }
-
-  var i
-  if (length === undefined) {
-    length = 0
-    for (i = 0; i < list.length; ++i) {
-      length += list[i].length
-    }
-  }
-
-  var buffer = Buffer.allocUnsafe(length)
-  var pos = 0
-  for (i = 0; i < list.length; ++i) {
-    var buf = list[i]
-    if (isInstance(buf, Uint8Array)) {
-      if (pos + buf.length > buffer.length) {
-        Buffer.from(buf).copy(buffer, pos)
-      } else {
-        Uint8Array.prototype.set.call(
-          buffer,
-          buf,
-          pos
-        )
-      }
-    } else if (!Buffer.isBuffer(buf)) {
-      throw new TypeError('"list" argument must be an Array of Buffers')
-    } else {
-      buf.copy(buffer, pos)
-    }
-    pos += buf.length
-  }
-  return buffer
-}
-
-function byteLength (string, encoding) {
-  if (Buffer.isBuffer(string)) {
-    return string.length
-  }
-  if (ArrayBuffer.isView(string) || isInstance(string, ArrayBuffer)) {
-    return string.byteLength
-  }
-  if (typeof string !== 'string') {
-    throw new TypeError(
-      'The "string" argument must be one of type string, Buffer, or ArrayBuffer. ' +
-      'Received type ' + typeof string
-    )
-  }
-
-  var len = string.length
-  var mustMatch = (arguments.length > 2 && arguments[2] === true)
-  if (!mustMatch && len === 0) return 0
-
-  // Use a for loop to avoid recursion
-  var loweredCase = false
-  for (;;) {
-    switch (encoding) {
-      case 'ascii':
-      case 'latin1':
-      case 'binary':
-        return len
-      case 'utf8':
-      case 'utf-8':
-        return utf8ToBytes(string).length
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return len * 2
-      case 'hex':
-        return len >>> 1
-      case 'base64':
-        return base64ToBytes(string).length
-      default:
-        if (loweredCase) {
-          return mustMatch ? -1 : utf8ToBytes(string).length // assume utf8
-        }
-        encoding = ('' + encoding).toLowerCase()
-        loweredCase = true
-    }
-  }
-}
-Buffer.byteLength = byteLength
-
-function slowToString (encoding, start, end) {
-  var loweredCase = false
-
-  // No need to verify that "this.length <= MAX_UINT32" since it's a read-only
-  // property of a typed array.
-
-  // This behaves neither like String nor Uint8Array in that we set start/end
-  // to their upper/lower bounds if the value passed is out of range.
-  // undefined is handled specially as per ECMA-262 6th Edition,
-  // Section 13.3.3.7 Runtime Semantics: KeyedBindingInitialization.
-  if (start === undefined || start < 0) {
-    start = 0
-  }
-  // Return early if start > this.length. Done here to prevent potential uint32
-  // coercion fail below.
-  if (start > this.length) {
-    return ''
-  }
-
-  if (end === undefined || end > this.length) {
-    end = this.length
-  }
-
-  if (end <= 0) {
-    return ''
-  }
-
-  // Force coercion to uint32. This will also coerce falsey/NaN values to 0.
-  end >>>= 0
-  start >>>= 0
-
-  if (end <= start) {
-    return ''
-  }
-
-  if (!encoding) encoding = 'utf8'
-
-  while (true) {
-    switch (encoding) {
-      case 'hex':
-        return hexSlice(this, start, end)
-
-      case 'utf8':
-      case 'utf-8':
-        return utf8Slice(this, start, end)
-
-      case 'ascii':
-        return asciiSlice(this, start, end)
-
-      case 'latin1':
-      case 'binary':
-        return latin1Slice(this, start, end)
-
-      case 'base64':
-        return base64Slice(this, start, end)
-
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return utf16leSlice(this, start, end)
-
-      default:
-        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
-        encoding = (encoding + '').toLowerCase()
-        loweredCase = true
-    }
-  }
-}
-
-// This property is used by `Buffer.isBuffer` (and the `is-buffer` npm package)
-// to detect a Buffer instance. It's not possible to use `instanceof Buffer`
-// reliably in a browserify context because there could be multiple different
-// copies of the 'buffer' package in use. This method works even for Buffer
-// instances that were created from another copy of the `buffer` package.
-// See: https://github.com/feross/buffer/issues/154
-Buffer.prototype._isBuffer = true
-
-function swap (b, n, m) {
-  var i = b[n]
-  b[n] = b[m]
-  b[m] = i
-}
-
-Buffer.prototype.swap16 = function swap16 () {
-  var len = this.length
-  if (len % 2 !== 0) {
-    throw new RangeError('Buffer size must be a multiple of 16-bits')
-  }
-  for (var i = 0; i < len; i += 2) {
-    swap(this, i, i + 1)
-  }
-  return this
-}
-
-Buffer.prototype.swap32 = function swap32 () {
-  var len = this.length
-  if (len % 4 !== 0) {
-    throw new RangeError('Buffer size must be a multiple of 32-bits')
-  }
-  for (var i = 0; i < len; i += 4) {
-    swap(this, i, i + 3)
-    swap(this, i + 1, i + 2)
-  }
-  return this
-}
-
-Buffer.prototype.swap64 = function swap64 () {
-  var len = this.length
-  if (len % 8 !== 0) {
-    throw new RangeError('Buffer size must be a multiple of 64-bits')
-  }
-  for (var i = 0; i < len; i += 8) {
-    swap(this, i, i + 7)
-    swap(this, i + 1, i + 6)
-    swap(this, i + 2, i + 5)
-    swap(this, i + 3, i + 4)
-  }
-  return this
-}
-
-Buffer.prototype.toString = function toString () {
-  var length = this.length
-  if (length === 0) return ''
-  if (arguments.length === 0) return utf8Slice(this, 0, length)
-  return slowToString.apply(this, arguments)
-}
-
-Buffer.prototype.toLocaleString = Buffer.prototype.toString
-
-Buffer.prototype.equals = function equals (b) {
-  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
-  if (this === b) return true
-  return Buffer.compare(this, b) === 0
-}
-
-Buffer.prototype.inspect = function inspect () {
-  var str = ''
-  var max = exports.INSPECT_MAX_BYTES
-  str = this.toString('hex', 0, max).replace(/(.{2})/g, '$1 ').trim()
-  if (this.length > max) str += ' ... '
-  return '<Buffer ' + str + '>'
-}
-if (customInspectSymbol) {
-  Buffer.prototype[customInspectSymbol] = Buffer.prototype.inspect
-}
-
-Buffer.prototype.compare = function compare (target, start, end, thisStart, thisEnd) {
-  if (isInstance(target, Uint8Array)) {
-    target = Buffer.from(target, target.offset, target.byteLength)
-  }
-  if (!Buffer.isBuffer(target)) {
-    throw new TypeError(
-      'The "target" argument must be one of type Buffer or Uint8Array. ' +
-      'Received type ' + (typeof target)
-    )
-  }
-
-  if (start === undefined) {
-    start = 0
-  }
-  if (end === undefined) {
-    end = target ? target.length : 0
-  }
-  if (thisStart === undefined) {
-    thisStart = 0
-  }
-  if (thisEnd === undefined) {
-    thisEnd = this.length
-  }
-
-  if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
-    throw new RangeError('out of range index')
-  }
-
-  if (thisStart >= thisEnd && start >= end) {
-    return 0
-  }
-  if (thisStart >= thisEnd) {
-    return -1
-  }
-  if (start >= end) {
-    return 1
-  }
-
-  start >>>= 0
-  end >>>= 0
-  thisStart >>>= 0
-  thisEnd >>>= 0
-
-  if (this === target) return 0
-
-  var x = thisEnd - thisStart
-  var y = end - start
-  var len = Math.min(x, y)
-
-  var thisCopy = this.slice(thisStart, thisEnd)
-  var targetCopy = target.slice(start, end)
-
-  for (var i = 0; i < len; ++i) {
-    if (thisCopy[i] !== targetCopy[i]) {
-      x = thisCopy[i]
-      y = targetCopy[i]
-      break
-    }
-  }
-
-  if (x < y) return -1
-  if (y < x) return 1
-  return 0
-}
-
-// Finds either the first index of `val` in `buffer` at offset >= `byteOffset`,
-// OR the last index of `val` in `buffer` at offset <= `byteOffset`.
-//
-// Arguments:
-// - buffer - a Buffer to search
-// - val - a string, Buffer, or number
-// - byteOffset - an index into `buffer`; will be clamped to an int32
-// - encoding - an optional encoding, relevant is val is a string
-// - dir - true for indexOf, false for lastIndexOf
-function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
-  // Empty buffer means no match
-  if (buffer.length === 0) return -1
-
-  // Normalize byteOffset
-  if (typeof byteOffset === 'string') {
-    encoding = byteOffset
-    byteOffset = 0
-  } else if (byteOffset > 0x7fffffff) {
-    byteOffset = 0x7fffffff
-  } else if (byteOffset < -0x80000000) {
-    byteOffset = -0x80000000
-  }
-  byteOffset = +byteOffset // Coerce to Number.
-  if (numberIsNaN(byteOffset)) {
-    // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
-    byteOffset = dir ? 0 : (buffer.length - 1)
-  }
-
-  // Normalize byteOffset: negative offsets start from the end of the buffer
-  if (byteOffset < 0) byteOffset = buffer.length + byteOffset
-  if (byteOffset >= buffer.length) {
-    if (dir) return -1
-    else byteOffset = buffer.length - 1
-  } else if (byteOffset < 0) {
-    if (dir) byteOffset = 0
-    else return -1
-  }
-
-  // Normalize val
-  if (typeof val === 'string') {
-    val = Buffer.from(val, encoding)
-  }
-
-  // Finally, search either indexOf (if dir is true) or lastIndexOf
-  if (Buffer.isBuffer(val)) {
-    // Special case: looking for empty string/buffer always fails
-    if (val.length === 0) {
-      return -1
-    }
-    return arrayIndexOf(buffer, val, byteOffset, encoding, dir)
-  } else if (typeof val === 'number') {
-    val = val & 0xFF // Search for a byte value [0-255]
-    if (typeof Uint8Array.prototype.indexOf === 'function') {
-      if (dir) {
-        return Uint8Array.prototype.indexOf.call(buffer, val, byteOffset)
-      } else {
-        return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
-      }
-    }
-    return arrayIndexOf(buffer, [val], byteOffset, encoding, dir)
-  }
-
-  throw new TypeError('val must be string, number or Buffer')
-}
-
-function arrayIndexOf (arr, val, byteOffset, encoding, dir) {
-  var indexSize = 1
-  var arrLength = arr.length
-  var valLength = val.length
-
-  if (encoding !== undefined) {
-    encoding = String(encoding).toLowerCase()
-    if (encoding === 'ucs2' || encoding === 'ucs-2' ||
-        encoding === 'utf16le' || encoding === 'utf-16le') {
-      if (arr.length < 2 || val.length < 2) {
-        return -1
-      }
-      indexSize = 2
-      arrLength /= 2
-      valLength /= 2
-      byteOffset /= 2
-    }
-  }
-
-  function read (buf, i) {
-    if (indexSize === 1) {
-      return buf[i]
-    } else {
-      return buf.readUInt16BE(i * indexSize)
-    }
-  }
-
-  var i
-  if (dir) {
-    var foundIndex = -1
-    for (i = byteOffset; i < arrLength; i++) {
-      if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
-        if (foundIndex === -1) foundIndex = i
-        if (i - foundIndex + 1 === valLength) return foundIndex * indexSize
-      } else {
-        if (foundIndex !== -1) i -= i - foundIndex
-        foundIndex = -1
-      }
-    }
-  } else {
-    if (byteOffset + valLength > arrLength) byteOffset = arrLength - valLength
-    for (i = byteOffset; i >= 0; i--) {
-      var found = true
-      for (var j = 0; j < valLength; j++) {
-        if (read(arr, i + j) !== read(val, j)) {
-          found = false
-          break
-        }
-      }
-      if (found) return i
-    }
-  }
-
-  return -1
-}
-
-Buffer.prototype.includes = function includes (val, byteOffset, encoding) {
-  return this.indexOf(val, byteOffset, encoding) !== -1
-}
-
-Buffer.prototype.indexOf = function indexOf (val, byteOffset, encoding) {
-  return bidirectionalIndexOf(this, val, byteOffset, encoding, true)
-}
-
-Buffer.prototype.lastIndexOf = function lastIndexOf (val, byteOffset, encoding) {
-  return bidirectionalIndexOf(this, val, byteOffset, encoding, false)
-}
-
-function hexWrite (buf, string, offset, length) {
-  offset = Number(offset) || 0
-  var remaining = buf.length - offset
-  if (!length) {
-    length = remaining
-  } else {
-    length = Number(length)
-    if (length > remaining) {
-      length = remaining
-    }
-  }
-
-  var strLen = string.length
-
-  if (length > strLen / 2) {
-    length = strLen / 2
-  }
-  for (var i = 0; i < length; ++i) {
-    var parsed = parseInt(string.substr(i * 2, 2), 16)
-    if (numberIsNaN(parsed)) return i
-    buf[offset + i] = parsed
-  }
-  return i
-}
-
-function utf8Write (buf, string, offset, length) {
-  return blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
-}
-
-function asciiWrite (buf, string, offset, length) {
-  return blitBuffer(asciiToBytes(string), buf, offset, length)
-}
-
-function base64Write (buf, string, offset, length) {
-  return blitBuffer(base64ToBytes(string), buf, offset, length)
-}
-
-function ucs2Write (buf, string, offset, length) {
-  return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length)
-}
-
-Buffer.prototype.write = function write (string, offset, length, encoding) {
-  // Buffer#write(string)
-  if (offset === undefined) {
-    encoding = 'utf8'
-    length = this.length
-    offset = 0
-  // Buffer#write(string, encoding)
-  } else if (length === undefined && typeof offset === 'string') {
-    encoding = offset
-    length = this.length
-    offset = 0
-  // Buffer#write(string, offset[, length][, encoding])
-  } else if (isFinite(offset)) {
-    offset = offset >>> 0
-    if (isFinite(length)) {
-      length = length >>> 0
-      if (encoding === undefined) encoding = 'utf8'
-    } else {
-      encoding = length
-      length = undefined
-    }
-  } else {
-    throw new Error(
-      'Buffer.write(string, encoding, offset[, length]) is no longer supported'
-    )
-  }
-
-  var remaining = this.length - offset
-  if (length === undefined || length > remaining) length = remaining
-
-  if ((string.length > 0 && (length < 0 || offset < 0)) || offset > this.length) {
-    throw new RangeError('Attempt to write outside buffer bounds')
-  }
-
-  if (!encoding) encoding = 'utf8'
-
-  var loweredCase = false
-  for (;;) {
-    switch (encoding) {
-      case 'hex':
-        return hexWrite(this, string, offset, length)
-
-      case 'utf8':
-      case 'utf-8':
-        return utf8Write(this, string, offset, length)
-
-      case 'ascii':
-      case 'latin1':
-      case 'binary':
-        return asciiWrite(this, string, offset, length)
-
-      case 'base64':
-        // Warning: maxLength not taken into account in base64Write
-        return base64Write(this, string, offset, length)
-
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return ucs2Write(this, string, offset, length)
-
-      default:
-        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
-        encoding = ('' + encoding).toLowerCase()
-        loweredCase = true
-    }
-  }
-}
-
-Buffer.prototype.toJSON = function toJSON () {
-  return {
-    type: 'Buffer',
-    data: Array.prototype.slice.call(this._arr || this, 0)
-  }
-}
-
-function base64Slice (buf, start, end) {
-  if (start === 0 && end === buf.length) {
-    return base64.fromByteArray(buf)
-  } else {
-    return base64.fromByteArray(buf.slice(start, end))
-  }
-}
-
-function utf8Slice (buf, start, end) {
-  end = Math.min(buf.length, end)
-  var res = []
-
-  var i = start
-  while (i < end) {
-    var firstByte = buf[i]
-    var codePoint = null
-    var bytesPerSequence = (firstByte > 0xEF)
-      ? 4
-      : (firstByte > 0xDF)
-          ? 3
-          : (firstByte > 0xBF)
-              ? 2
-              : 1
-
-    if (i + bytesPerSequence <= end) {
-      var secondByte, thirdByte, fourthByte, tempCodePoint
-
-      switch (bytesPerSequence) {
-        case 1:
-          if (firstByte < 0x80) {
-            codePoint = firstByte
-          }
-          break
-        case 2:
-          secondByte = buf[i + 1]
-          if ((secondByte & 0xC0) === 0x80) {
-            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
-            if (tempCodePoint > 0x7F) {
-              codePoint = tempCodePoint
-            }
-          }
-          break
-        case 3:
-          secondByte = buf[i + 1]
-          thirdByte = buf[i + 2]
-          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
-            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
-            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
-              codePoint = tempCodePoint
-            }
-          }
-          break
-        case 4:
-          secondByte = buf[i + 1]
-          thirdByte = buf[i + 2]
-          fourthByte = buf[i + 3]
-          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
-            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
-            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
-              codePoint = tempCodePoint
-            }
-          }
-      }
-    }
-
-    if (codePoint === null) {
-      // we did not generate a valid codePoint so insert a
-      // replacement char (U+FFFD) and advance only 1 byte
-      codePoint = 0xFFFD
-      bytesPerSequence = 1
-    } else if (codePoint > 0xFFFF) {
-      // encode to utf16 (surrogate pair dance)
-      codePoint -= 0x10000
-      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
-      codePoint = 0xDC00 | codePoint & 0x3FF
-    }
-
-    res.push(codePoint)
-    i += bytesPerSequence
-  }
-
-  return decodeCodePointsArray(res)
-}
-
-// Based on http://stackoverflow.com/a/22747272/680742, the browser with
-// the lowest limit is Chrome, with 0x10000 args.
-// We go 1 magnitude less, for safety
-var MAX_ARGUMENTS_LENGTH = 0x1000
-
-function decodeCodePointsArray (codePoints) {
-  var len = codePoints.length
-  if (len <= MAX_ARGUMENTS_LENGTH) {
-    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
-  }
-
-  // Decode in chunks to avoid "call stack size exceeded".
-  var res = ''
-  var i = 0
-  while (i < len) {
-    res += String.fromCharCode.apply(
-      String,
-      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
-    )
-  }
-  return res
-}
-
-function asciiSlice (buf, start, end) {
-  var ret = ''
-  end = Math.min(buf.length, end)
-
-  for (var i = start; i < end; ++i) {
-    ret += String.fromCharCode(buf[i] & 0x7F)
-  }
-  return ret
-}
-
-function latin1Slice (buf, start, end) {
-  var ret = ''
-  end = Math.min(buf.length, end)
-
-  for (var i = start; i < end; ++i) {
-    ret += String.fromCharCode(buf[i])
-  }
-  return ret
-}
-
-function hexSlice (buf, start, end) {
-  var len = buf.length
-
-  if (!start || start < 0) start = 0
-  if (!end || end < 0 || end > len) end = len
-
-  var out = ''
-  for (var i = start; i < end; ++i) {
-    out += hexSliceLookupTable[buf[i]]
-  }
-  return out
-}
-
-function utf16leSlice (buf, start, end) {
-  var bytes = buf.slice(start, end)
-  var res = ''
-  // If bytes.length is odd, the last 8 bits must be ignored (same as node.js)
-  for (var i = 0; i < bytes.length - 1; i += 2) {
-    res += String.fromCharCode(bytes[i] + (bytes[i + 1] * 256))
-  }
-  return res
-}
-
-Buffer.prototype.slice = function slice (start, end) {
-  var len = this.length
-  start = ~~start
-  end = end === undefined ? len : ~~end
-
-  if (start < 0) {
-    start += len
-    if (start < 0) start = 0
-  } else if (start > len) {
-    start = len
-  }
-
-  if (end < 0) {
-    end += len
-    if (end < 0) end = 0
-  } else if (end > len) {
-    end = len
-  }
-
-  if (end < start) end = start
-
-  var newBuf = this.subarray(start, end)
-  // Return an augmented `Uint8Array` instance
-  Object.setPrototypeOf(newBuf, Buffer.prototype)
-
-  return newBuf
-}
-
-/*
- * Need to make sure that buffer isn't trying to write out of bounds.
- */
-function checkOffset (offset, ext, length) {
-  if ((offset % 1) !== 0 || offset < 0) throw new RangeError('offset is not uint')
-  if (offset + ext > length) throw new RangeError('Trying to access beyond buffer length')
-}
-
-Buffer.prototype.readUintLE =
-Buffer.prototype.readUIntLE = function readUIntLE (offset, byteLength, noAssert) {
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
-  if (!noAssert) checkOffset(offset, byteLength, this.length)
-
-  var val = this[offset]
-  var mul = 1
-  var i = 0
-  while (++i < byteLength && (mul *= 0x100)) {
-    val += this[offset + i] * mul
-  }
-
-  return val
-}
-
-Buffer.prototype.readUintBE =
-Buffer.prototype.readUIntBE = function readUIntBE (offset, byteLength, noAssert) {
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
-  if (!noAssert) {
-    checkOffset(offset, byteLength, this.length)
-  }
-
-  var val = this[offset + --byteLength]
-  var mul = 1
-  while (byteLength > 0 && (mul *= 0x100)) {
-    val += this[offset + --byteLength] * mul
-  }
-
-  return val
-}
-
-Buffer.prototype.readUint8 =
-Buffer.prototype.readUInt8 = function readUInt8 (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 1, this.length)
-  return this[offset]
-}
-
-Buffer.prototype.readUint16LE =
-Buffer.prototype.readUInt16LE = function readUInt16LE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  return this[offset] | (this[offset + 1] << 8)
-}
-
-Buffer.prototype.readUint16BE =
-Buffer.prototype.readUInt16BE = function readUInt16BE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  return (this[offset] << 8) | this[offset + 1]
-}
-
-Buffer.prototype.readUint32LE =
-Buffer.prototype.readUInt32LE = function readUInt32LE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return ((this[offset]) |
-      (this[offset + 1] << 8) |
-      (this[offset + 2] << 16)) +
-      (this[offset + 3] * 0x1000000)
-}
-
-Buffer.prototype.readUint32BE =
-Buffer.prototype.readUInt32BE = function readUInt32BE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return (this[offset] * 0x1000000) +
-    ((this[offset + 1] << 16) |
-    (this[offset + 2] << 8) |
-    this[offset + 3])
-}
-
-Buffer.prototype.readIntLE = function readIntLE (offset, byteLength, noAssert) {
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
-  if (!noAssert) checkOffset(offset, byteLength, this.length)
-
-  var val = this[offset]
-  var mul = 1
-  var i = 0
-  while (++i < byteLength && (mul *= 0x100)) {
-    val += this[offset + i] * mul
-  }
-  mul *= 0x80
-
-  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
-
-  return val
-}
-
-Buffer.prototype.readIntBE = function readIntBE (offset, byteLength, noAssert) {
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
-  if (!noAssert) checkOffset(offset, byteLength, this.length)
-
-  var i = byteLength
-  var mul = 1
-  var val = this[offset + --i]
-  while (i > 0 && (mul *= 0x100)) {
-    val += this[offset + --i] * mul
-  }
-  mul *= 0x80
-
-  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
-
-  return val
-}
-
-Buffer.prototype.readInt8 = function readInt8 (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 1, this.length)
-  if (!(this[offset] & 0x80)) return (this[offset])
-  return ((0xff - this[offset] + 1) * -1)
-}
-
-Buffer.prototype.readInt16LE = function readInt16LE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  var val = this[offset] | (this[offset + 1] << 8)
-  return (val & 0x8000) ? val | 0xFFFF0000 : val
-}
-
-Buffer.prototype.readInt16BE = function readInt16BE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  var val = this[offset + 1] | (this[offset] << 8)
-  return (val & 0x8000) ? val | 0xFFFF0000 : val
-}
-
-Buffer.prototype.readInt32LE = function readInt32LE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return (this[offset]) |
-    (this[offset + 1] << 8) |
-    (this[offset + 2] << 16) |
-    (this[offset + 3] << 24)
-}
-
-Buffer.prototype.readInt32BE = function readInt32BE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return (this[offset] << 24) |
-    (this[offset + 1] << 16) |
-    (this[offset + 2] << 8) |
-    (this[offset + 3])
-}
-
-Buffer.prototype.readFloatLE = function readFloatLE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 4, this.length)
-  return ieee754.read(this, offset, true, 23, 4)
-}
-
-Buffer.prototype.readFloatBE = function readFloatBE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 4, this.length)
-  return ieee754.read(this, offset, false, 23, 4)
-}
-
-Buffer.prototype.readDoubleLE = function readDoubleLE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 8, this.length)
-  return ieee754.read(this, offset, true, 52, 8)
-}
-
-Buffer.prototype.readDoubleBE = function readDoubleBE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 8, this.length)
-  return ieee754.read(this, offset, false, 52, 8)
-}
-
-function checkInt (buf, value, offset, ext, max, min) {
-  if (!Buffer.isBuffer(buf)) throw new TypeError('"buffer" argument must be a Buffer instance')
-  if (value > max || value < min) throw new RangeError('"value" argument is out of bounds')
-  if (offset + ext > buf.length) throw new RangeError('Index out of range')
-}
-
-Buffer.prototype.writeUintLE =
-Buffer.prototype.writeUIntLE = function writeUIntLE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
-  if (!noAssert) {
-    var maxBytes = Math.pow(2, 8 * byteLength) - 1
-    checkInt(this, value, offset, byteLength, maxBytes, 0)
-  }
-
-  var mul = 1
-  var i = 0
-  this[offset] = value & 0xFF
-  while (++i < byteLength && (mul *= 0x100)) {
-    this[offset + i] = (value / mul) & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeUintBE =
-Buffer.prototype.writeUIntBE = function writeUIntBE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
-  if (!noAssert) {
-    var maxBytes = Math.pow(2, 8 * byteLength) - 1
-    checkInt(this, value, offset, byteLength, maxBytes, 0)
-  }
-
-  var i = byteLength - 1
-  var mul = 1
-  this[offset + i] = value & 0xFF
-  while (--i >= 0 && (mul *= 0x100)) {
-    this[offset + i] = (value / mul) & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeUint8 =
-Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
-  this[offset] = (value & 0xff)
-  return offset + 1
-}
-
-Buffer.prototype.writeUint16LE =
-Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
-  this[offset] = (value & 0xff)
-  this[offset + 1] = (value >>> 8)
-  return offset + 2
-}
-
-Buffer.prototype.writeUint16BE =
-Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
-  this[offset] = (value >>> 8)
-  this[offset + 1] = (value & 0xff)
-  return offset + 2
-}
-
-Buffer.prototype.writeUint32LE =
-Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
-  this[offset + 3] = (value >>> 24)
-  this[offset + 2] = (value >>> 16)
-  this[offset + 1] = (value >>> 8)
-  this[offset] = (value & 0xff)
-  return offset + 4
-}
-
-Buffer.prototype.writeUint32BE =
-Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
-  this[offset] = (value >>> 24)
-  this[offset + 1] = (value >>> 16)
-  this[offset + 2] = (value >>> 8)
-  this[offset + 3] = (value & 0xff)
-  return offset + 4
-}
-
-Buffer.prototype.writeIntLE = function writeIntLE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) {
-    var limit = Math.pow(2, (8 * byteLength) - 1)
-
-    checkInt(this, value, offset, byteLength, limit - 1, -limit)
-  }
-
-  var i = 0
-  var mul = 1
-  var sub = 0
-  this[offset] = value & 0xFF
-  while (++i < byteLength && (mul *= 0x100)) {
-    if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
-      sub = 1
-    }
-    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeIntBE = function writeIntBE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) {
-    var limit = Math.pow(2, (8 * byteLength) - 1)
-
-    checkInt(this, value, offset, byteLength, limit - 1, -limit)
-  }
-
-  var i = byteLength - 1
-  var mul = 1
-  var sub = 0
-  this[offset + i] = value & 0xFF
-  while (--i >= 0 && (mul *= 0x100)) {
-    if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
-      sub = 1
-    }
-    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeInt8 = function writeInt8 (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
-  if (value < 0) value = 0xff + value + 1
-  this[offset] = (value & 0xff)
-  return offset + 1
-}
-
-Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
-  this[offset] = (value & 0xff)
-  this[offset + 1] = (value >>> 8)
-  return offset + 2
-}
-
-Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
-  this[offset] = (value >>> 8)
-  this[offset + 1] = (value & 0xff)
-  return offset + 2
-}
-
-Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
-  this[offset] = (value & 0xff)
-  this[offset + 1] = (value >>> 8)
-  this[offset + 2] = (value >>> 16)
-  this[offset + 3] = (value >>> 24)
-  return offset + 4
-}
-
-Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
-  if (value < 0) value = 0xffffffff + value + 1
-  this[offset] = (value >>> 24)
-  this[offset + 1] = (value >>> 16)
-  this[offset + 2] = (value >>> 8)
-  this[offset + 3] = (value & 0xff)
-  return offset + 4
-}
-
-function checkIEEE754 (buf, value, offset, ext, max, min) {
-  if (offset + ext > buf.length) throw new RangeError('Index out of range')
-  if (offset < 0) throw new RangeError('Index out of range')
-}
-
-function writeFloat (buf, value, offset, littleEndian, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) {
-    checkIEEE754(buf, value, offset, 4, 3.4028234663852886e+38, -3.4028234663852886e+38)
-  }
-  ieee754.write(buf, value, offset, littleEndian, 23, 4)
-  return offset + 4
-}
-
-Buffer.prototype.writeFloatLE = function writeFloatLE (value, offset, noAssert) {
-  return writeFloat(this, value, offset, true, noAssert)
-}
-
-Buffer.prototype.writeFloatBE = function writeFloatBE (value, offset, noAssert) {
-  return writeFloat(this, value, offset, false, noAssert)
-}
-
-function writeDouble (buf, value, offset, littleEndian, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) {
-    checkIEEE754(buf, value, offset, 8, 1.7976931348623157E+308, -1.7976931348623157E+308)
-  }
-  ieee754.write(buf, value, offset, littleEndian, 52, 8)
-  return offset + 8
-}
-
-Buffer.prototype.writeDoubleLE = function writeDoubleLE (value, offset, noAssert) {
-  return writeDouble(this, value, offset, true, noAssert)
-}
-
-Buffer.prototype.writeDoubleBE = function writeDoubleBE (value, offset, noAssert) {
-  return writeDouble(this, value, offset, false, noAssert)
-}
-
-// copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
-Buffer.prototype.copy = function copy (target, targetStart, start, end) {
-  if (!Buffer.isBuffer(target)) throw new TypeError('argument should be a Buffer')
-  if (!start) start = 0
-  if (!end && end !== 0) end = this.length
-  if (targetStart >= target.length) targetStart = target.length
-  if (!targetStart) targetStart = 0
-  if (end > 0 && end < start) end = start
-
-  // Copy 0 bytes; we're done
-  if (end === start) return 0
-  if (target.length === 0 || this.length === 0) return 0
-
-  // Fatal error conditions
-  if (targetStart < 0) {
-    throw new RangeError('targetStart out of bounds')
-  }
-  if (start < 0 || start >= this.length) throw new RangeError('Index out of range')
-  if (end < 0) throw new RangeError('sourceEnd out of bounds')
-
-  // Are we oob?
-  if (end > this.length) end = this.length
-  if (target.length - targetStart < end - start) {
-    end = target.length - targetStart + start
-  }
-
-  var len = end - start
-
-  if (this === target && typeof Uint8Array.prototype.copyWithin === 'function') {
-    // Use built-in when available, missing from IE11
-    this.copyWithin(targetStart, start, end)
-  } else {
-    Uint8Array.prototype.set.call(
-      target,
-      this.subarray(start, end),
-      targetStart
-    )
-  }
-
-  return len
-}
-
-// Usage:
-//    buffer.fill(number[, offset[, end]])
-//    buffer.fill(buffer[, offset[, end]])
-//    buffer.fill(string[, offset[, end]][, encoding])
-Buffer.prototype.fill = function fill (val, start, end, encoding) {
-  // Handle string cases:
-  if (typeof val === 'string') {
-    if (typeof start === 'string') {
-      encoding = start
-      start = 0
-      end = this.length
-    } else if (typeof end === 'string') {
-      encoding = end
-      end = this.length
-    }
-    if (encoding !== undefined && typeof encoding !== 'string') {
-      throw new TypeError('encoding must be a string')
-    }
-    if (typeof encoding === 'string' && !Buffer.isEncoding(encoding)) {
-      throw new TypeError('Unknown encoding: ' + encoding)
-    }
-    if (val.length === 1) {
-      var code = val.charCodeAt(0)
-      if ((encoding === 'utf8' && code < 128) ||
-          encoding === 'latin1') {
-        // Fast path: If `val` fits into a single byte, use that numeric value.
-        val = code
-      }
-    }
-  } else if (typeof val === 'number') {
-    val = val & 255
-  } else if (typeof val === 'boolean') {
-    val = Number(val)
-  }
-
-  // Invalid ranges are not set to a default, so can range check early.
-  if (start < 0 || this.length < start || this.length < end) {
-    throw new RangeError('Out of range index')
-  }
-
-  if (end <= start) {
-    return this
-  }
-
-  start = start >>> 0
-  end = end === undefined ? this.length : end >>> 0
-
-  if (!val) val = 0
-
-  var i
-  if (typeof val === 'number') {
-    for (i = start; i < end; ++i) {
-      this[i] = val
-    }
-  } else {
-    var bytes = Buffer.isBuffer(val)
-      ? val
-      : Buffer.from(val, encoding)
-    var len = bytes.length
-    if (len === 0) {
-      throw new TypeError('The value "' + val +
-        '" is invalid for argument "value"')
-    }
-    for (i = 0; i < end - start; ++i) {
-      this[i + start] = bytes[i % len]
-    }
-  }
-
-  return this
-}
-
-// HELPER FUNCTIONS
-// ================
-
-var INVALID_BASE64_RE = /[^+/0-9A-Za-z-_]/g
-
-function base64clean (str) {
-  // Node takes equal signs as end of the Base64 encoding
-  str = str.split('=')[0]
-  // Node strips out invalid characters like \n and \t from the string, base64-js does not
-  str = str.trim().replace(INVALID_BASE64_RE, '')
-  // Node converts strings with length < 2 to ''
-  if (str.length < 2) return ''
-  // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
-  while (str.length % 4 !== 0) {
-    str = str + '='
-  }
-  return str
-}
-
-function utf8ToBytes (string, units) {
-  units = units || Infinity
-  var codePoint
-  var length = string.length
-  var leadSurrogate = null
-  var bytes = []
-
-  for (var i = 0; i < length; ++i) {
-    codePoint = string.charCodeAt(i)
-
-    // is surrogate component
-    if (codePoint > 0xD7FF && codePoint < 0xE000) {
-      // last char was a lead
-      if (!leadSurrogate) {
-        // no lead yet
-        if (codePoint > 0xDBFF) {
-          // unexpected trail
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          continue
-        } else if (i + 1 === length) {
-          // unpaired lead
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          continue
-        }
-
-        // valid lead
-        leadSurrogate = codePoint
-
-        continue
-      }
-
-      // 2 leads in a row
-      if (codePoint < 0xDC00) {
-        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-        leadSurrogate = codePoint
-        continue
-      }
-
-      // valid surrogate pair
-      codePoint = (leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00) + 0x10000
-    } else if (leadSurrogate) {
-      // valid bmp char, but last char was a lead
-      if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-    }
-
-    leadSurrogate = null
-
-    // encode utf8
-    if (codePoint < 0x80) {
-      if ((units -= 1) < 0) break
-      bytes.push(codePoint)
-    } else if (codePoint < 0x800) {
-      if ((units -= 2) < 0) break
-      bytes.push(
-        codePoint >> 0x6 | 0xC0,
-        codePoint & 0x3F | 0x80
-      )
-    } else if (codePoint < 0x10000) {
-      if ((units -= 3) < 0) break
-      bytes.push(
-        codePoint >> 0xC | 0xE0,
-        codePoint >> 0x6 & 0x3F | 0x80,
-        codePoint & 0x3F | 0x80
-      )
-    } else if (codePoint < 0x110000) {
-      if ((units -= 4) < 0) break
-      bytes.push(
-        codePoint >> 0x12 | 0xF0,
-        codePoint >> 0xC & 0x3F | 0x80,
-        codePoint >> 0x6 & 0x3F | 0x80,
-        codePoint & 0x3F | 0x80
-      )
-    } else {
-      throw new Error('Invalid code point')
-    }
-  }
-
-  return bytes
-}
-
-function asciiToBytes (str) {
-  var byteArray = []
-  for (var i = 0; i < str.length; ++i) {
-    // Node's code seems to be doing this and not & 0x7F..
-    byteArray.push(str.charCodeAt(i) & 0xFF)
-  }
-  return byteArray
-}
-
-function utf16leToBytes (str, units) {
-  var c, hi, lo
-  var byteArray = []
-  for (var i = 0; i < str.length; ++i) {
-    if ((units -= 2) < 0) break
-
-    c = str.charCodeAt(i)
-    hi = c >> 8
-    lo = c % 256
-    byteArray.push(lo)
-    byteArray.push(hi)
-  }
-
-  return byteArray
-}
-
-function base64ToBytes (str) {
-  return base64.toByteArray(base64clean(str))
-}
-
-function blitBuffer (src, dst, offset, length) {
-  for (var i = 0; i < length; ++i) {
-    if ((i + offset >= dst.length) || (i >= src.length)) break
-    dst[i + offset] = src[i]
-  }
-  return i
-}
-
-// ArrayBuffer or Uint8Array objects from other contexts (i.e. iframes) do not pass
-// the `instanceof` check but they should be treated as of that type.
-// See: https://github.com/feross/buffer/issues/166
-function isInstance (obj, type) {
-  return obj instanceof type ||
-    (obj != null && obj.constructor != null && obj.constructor.name != null &&
-      obj.constructor.name === type.name)
-}
-function numberIsNaN (obj) {
-  // For IE11 support
-  return obj !== obj // eslint-disable-line no-self-compare
-}
-
-// Create lookup table for `toString('hex')`
-// See: https://github.com/feross/buffer/issues/219
-var hexSliceLookupTable = (function () {
-  var alphabet = '0123456789abcdef'
-  var table = new Array(256)
-  for (var i = 0; i < 16; ++i) {
-    var i16 = i * 16
-    for (var j = 0; j < 16; ++j) {
-      table[i16 + j] = alphabet[i] + alphabet[j]
-    }
-  }
-  return table
-})()
-
-}).call(this)}).call(this,require("buffer").Buffer)
-},{"base64-js":178,"buffer":180,"ieee754":181}],181:[function(require,module,exports){
-/*! ieee754. BSD-3-Clause License. Feross Aboukhadijeh <https://feross.org/opensource> */
-exports.read = function (buffer, offset, isLE, mLen, nBytes) {
-  var e, m
-  var eLen = (nBytes * 8) - mLen - 1
-  var eMax = (1 << eLen) - 1
-  var eBias = eMax >> 1
-  var nBits = -7
-  var i = isLE ? (nBytes - 1) : 0
-  var d = isLE ? -1 : 1
-  var s = buffer[offset + i]
-
-  i += d
-
-  e = s & ((1 << (-nBits)) - 1)
-  s >>= (-nBits)
-  nBits += eLen
-  for (; nBits > 0; e = (e * 256) + buffer[offset + i], i += d, nBits -= 8) {}
-
-  m = e & ((1 << (-nBits)) - 1)
-  e >>= (-nBits)
-  nBits += mLen
-  for (; nBits > 0; m = (m * 256) + buffer[offset + i], i += d, nBits -= 8) {}
-
-  if (e === 0) {
-    e = 1 - eBias
-  } else if (e === eMax) {
-    return m ? NaN : ((s ? -1 : 1) * Infinity)
-  } else {
-    m = m + Math.pow(2, mLen)
-    e = e - eBias
-  }
-  return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
-}
-
-exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
-  var e, m, c
-  var eLen = (nBytes * 8) - mLen - 1
-  var eMax = (1 << eLen) - 1
-  var eBias = eMax >> 1
-  var rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0)
-  var i = isLE ? 0 : (nBytes - 1)
-  var d = isLE ? 1 : -1
-  var s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0
-
-  value = Math.abs(value)
-
-  if (isNaN(value) || value === Infinity) {
-    m = isNaN(value) ? 1 : 0
-    e = eMax
-  } else {
-    e = Math.floor(Math.log(value) / Math.LN2)
-    if (value * (c = Math.pow(2, -e)) < 1) {
-      e--
-      c *= 2
-    }
-    if (e + eBias >= 1) {
-      value += rt / c
-    } else {
-      value += rt * Math.pow(2, 1 - eBias)
-    }
-    if (value * c >= 2) {
-      e++
-      c /= 2
-    }
-
-    if (e + eBias >= eMax) {
-      m = 0
-      e = eMax
-    } else if (e + eBias >= 1) {
-      m = ((value * c) - 1) * Math.pow(2, mLen)
-      e = e + eBias
-    } else {
-      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen)
-      e = 0
-    }
-  }
-
-  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8) {}
-
-  e = (e << mLen) | m
-  eLen += mLen
-  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
-
-  buffer[offset + i - d] |= s * 128
-}
-
-},{}],182:[function(require,module,exports){
-if (typeof Object.create === 'function') {
-  // implementation from standard node.js 'util' module
-  module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    ctor.prototype = Object.create(superCtor.prototype, {
-      constructor: {
-        value: ctor,
-        enumerable: false,
-        writable: true,
-        configurable: true
-      }
-    });
-  };
-} else {
-  // old school shim for old browsers
-  module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    var TempCtor = function () {}
-    TempCtor.prototype = superCtor.prototype
-    ctor.prototype = new TempCtor()
-    ctor.prototype.constructor = ctor
-  }
-}
-
-},{}],183:[function(require,module,exports){
-arguments[4][182][0].apply(exports,arguments)
-},{"dup":182}],184:[function(require,module,exports){
-/*!
- * Determine if an object is a Buffer
- *
- * @author   Feross Aboukhadijeh <https://feross.org>
- * @license  MIT
- */
-
-// The _isBuffer check is for Safari 5-7 support, because it's missing
-// Object.prototype.constructor. Remove this eventually
-module.exports = function (obj) {
-  return obj != null && (isBuffer(obj) || isSlowBuffer(obj) || !!obj._isBuffer)
-}
-
-function isBuffer (obj) {
-  return !!obj.constructor && typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
-}
-
-// For Node v0.10 support. Remove this eventually.
-function isSlowBuffer (obj) {
-  return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
-}
-
-},{}],185:[function(require,module,exports){
-/*
-object-assign
-(c) Sindre Sorhus
-@license MIT
-*/
-
-'use strict';
-/* eslint-disable no-unused-vars */
-var getOwnPropertySymbols = Object.getOwnPropertySymbols;
-var hasOwnProperty = Object.prototype.hasOwnProperty;
-var propIsEnumerable = Object.prototype.propertyIsEnumerable;
-
-function toObject(val) {
-	if (val === null || val === undefined) {
-		throw new TypeError('Object.assign cannot be called with null or undefined');
-	}
-
-	return Object(val);
-}
-
-function shouldUseNative() {
-	try {
-		if (!Object.assign) {
-			return false;
-		}
-
-		// Detect buggy property enumeration order in older V8 versions.
-
-		// https://bugs.chromium.org/p/v8/issues/detail?id=4118
-		var test1 = new String('abc');  // eslint-disable-line no-new-wrappers
-		test1[5] = 'de';
-		if (Object.getOwnPropertyNames(test1)[0] === '5') {
-			return false;
-		}
-
-		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
-		var test2 = {};
-		for (var i = 0; i < 10; i++) {
-			test2['_' + String.fromCharCode(i)] = i;
-		}
-		var order2 = Object.getOwnPropertyNames(test2).map(function (n) {
-			return test2[n];
-		});
-		if (order2.join('') !== '0123456789') {
-			return false;
-		}
-
-		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
-		var test3 = {};
-		'abcdefghijklmnopqrst'.split('').forEach(function (letter) {
-			test3[letter] = letter;
-		});
-		if (Object.keys(Object.assign({}, test3)).join('') !==
-				'abcdefghijklmnopqrst') {
-			return false;
-		}
-
-		return true;
-	} catch (err) {
-		// We don't expect any of the above to throw, but better to be safe.
-		return false;
-	}
-}
-
-module.exports = shouldUseNative() ? Object.assign : function (target, source) {
-	var from;
-	var to = toObject(target);
-	var symbols;
-
-	for (var s = 1; s < arguments.length; s++) {
-		from = Object(arguments[s]);
-
-		for (var key in from) {
-			if (hasOwnProperty.call(from, key)) {
-				to[key] = from[key];
-			}
-		}
-
-		if (getOwnPropertySymbols) {
-			symbols = getOwnPropertySymbols(from);
-			for (var i = 0; i < symbols.length; i++) {
-				if (propIsEnumerable.call(from, symbols[i])) {
-					to[symbols[i]] = from[symbols[i]];
-				}
-			}
-		}
-	}
-
-	return to;
-};
-
-},{}],186:[function(require,module,exports){
-(function (process){(function (){
-// .dirname, .basename, and .extname methods are extracted from Node.js v8.11.1,
-// backported and transplited with Babel, with backwards-compat fixes
-
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-// resolves . and .. elements in a path array with directory names there
-// must be no slashes, empty elements, or device names (c:\) in the array
-// (so also no leading and trailing slashes - it does not distinguish
-// relative and absolute paths)
-function normalizeArray(parts, allowAboveRoot) {
-  // if the path tries to go above the root, `up` ends up > 0
-  var up = 0;
-  for (var i = parts.length - 1; i >= 0; i--) {
-    var last = parts[i];
-    if (last === '.') {
-      parts.splice(i, 1);
-    } else if (last === '..') {
-      parts.splice(i, 1);
-      up++;
-    } else if (up) {
-      parts.splice(i, 1);
-      up--;
-    }
-  }
-
-  // if the path is allowed to go above the root, restore leading ..s
-  if (allowAboveRoot) {
-    for (; up--; up) {
-      parts.unshift('..');
-    }
-  }
-
-  return parts;
-}
-
-// path.resolve([from ...], to)
-// posix version
-exports.resolve = function() {
-  var resolvedPath = '',
-      resolvedAbsolute = false;
-
-  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
-    var path = (i >= 0) ? arguments[i] : process.cwd();
-
-    // Skip empty and invalid entries
-    if (typeof path !== 'string') {
-      throw new TypeError('Arguments to path.resolve must be strings');
-    } else if (!path) {
-      continue;
-    }
-
-    resolvedPath = path + '/' + resolvedPath;
-    resolvedAbsolute = path.charAt(0) === '/';
-  }
-
-  // At this point the path should be resolved to a full absolute path, but
-  // handle relative paths to be safe (might happen when process.cwd() fails)
-
-  // Normalize the path
-  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
-    return !!p;
-  }), !resolvedAbsolute).join('/');
-
-  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
-};
-
-// path.normalize(path)
-// posix version
-exports.normalize = function(path) {
-  var isAbsolute = exports.isAbsolute(path),
-      trailingSlash = substr(path, -1) === '/';
-
-  // Normalize the path
-  path = normalizeArray(filter(path.split('/'), function(p) {
-    return !!p;
-  }), !isAbsolute).join('/');
-
-  if (!path && !isAbsolute) {
-    path = '.';
-  }
-  if (path && trailingSlash) {
-    path += '/';
-  }
-
-  return (isAbsolute ? '/' : '') + path;
-};
-
-// posix version
-exports.isAbsolute = function(path) {
-  return path.charAt(0) === '/';
-};
-
-// posix version
-exports.join = function() {
-  var paths = Array.prototype.slice.call(arguments, 0);
-  return exports.normalize(filter(paths, function(p, index) {
-    if (typeof p !== 'string') {
-      throw new TypeError('Arguments to path.join must be strings');
-    }
-    return p;
-  }).join('/'));
-};
-
-
-// path.relative(from, to)
-// posix version
-exports.relative = function(from, to) {
-  from = exports.resolve(from).substr(1);
-  to = exports.resolve(to).substr(1);
-
-  function trim(arr) {
-    var start = 0;
-    for (; start < arr.length; start++) {
-      if (arr[start] !== '') break;
-    }
-
-    var end = arr.length - 1;
-    for (; end >= 0; end--) {
-      if (arr[end] !== '') break;
-    }
-
-    if (start > end) return [];
-    return arr.slice(start, end - start + 1);
-  }
-
-  var fromParts = trim(from.split('/'));
-  var toParts = trim(to.split('/'));
-
-  var length = Math.min(fromParts.length, toParts.length);
-  var samePartsLength = length;
-  for (var i = 0; i < length; i++) {
-    if (fromParts[i] !== toParts[i]) {
-      samePartsLength = i;
-      break;
-    }
-  }
-
-  var outputParts = [];
-  for (var i = samePartsLength; i < fromParts.length; i++) {
-    outputParts.push('..');
-  }
-
-  outputParts = outputParts.concat(toParts.slice(samePartsLength));
-
-  return outputParts.join('/');
-};
-
-exports.sep = '/';
-exports.delimiter = ':';
-
-exports.dirname = function (path) {
-  if (typeof path !== 'string') path = path + '';
-  if (path.length === 0) return '.';
-  var code = path.charCodeAt(0);
-  var hasRoot = code === 47 /*/*/;
-  var end = -1;
-  var matchedSlash = true;
-  for (var i = path.length - 1; i >= 1; --i) {
-    code = path.charCodeAt(i);
-    if (code === 47 /*/*/) {
-        if (!matchedSlash) {
-          end = i;
-          break;
-        }
-      } else {
-      // We saw the first non-path separator
-      matchedSlash = false;
-    }
-  }
-
-  if (end === -1) return hasRoot ? '/' : '.';
-  if (hasRoot && end === 1) {
-    // return '//';
-    // Backwards-compat fix:
-    return '/';
-  }
-  return path.slice(0, end);
-};
-
-function basename(path) {
-  if (typeof path !== 'string') path = path + '';
-
-  var start = 0;
-  var end = -1;
-  var matchedSlash = true;
-  var i;
-
-  for (i = path.length - 1; i >= 0; --i) {
-    if (path.charCodeAt(i) === 47 /*/*/) {
-        // If we reached a path separator that was not part of a set of path
-        // separators at the end of the string, stop now
-        if (!matchedSlash) {
-          start = i + 1;
-          break;
-        }
-      } else if (end === -1) {
-      // We saw the first non-path separator, mark this as the end of our
-      // path component
-      matchedSlash = false;
-      end = i + 1;
-    }
-  }
-
-  if (end === -1) return '';
-  return path.slice(start, end);
-}
-
-// Uses a mixed approach for backwards-compatibility, as ext behavior changed
-// in new Node.js versions, so only basename() above is backported here
-exports.basename = function (path, ext) {
-  var f = basename(path);
-  if (ext && f.substr(-1 * ext.length) === ext) {
-    f = f.substr(0, f.length - ext.length);
-  }
-  return f;
-};
-
-exports.extname = function (path) {
-  if (typeof path !== 'string') path = path + '';
-  var startDot = -1;
-  var startPart = 0;
-  var end = -1;
-  var matchedSlash = true;
-  // Track the state of characters (if any) we see before our first dot and
-  // after any path separator we find
-  var preDotState = 0;
-  for (var i = path.length - 1; i >= 0; --i) {
-    var code = path.charCodeAt(i);
-    if (code === 47 /*/*/) {
-        // If we reached a path separator that was not part of a set of path
-        // separators at the end of the string, stop now
-        if (!matchedSlash) {
-          startPart = i + 1;
-          break;
-        }
-        continue;
-      }
-    if (end === -1) {
-      // We saw the first non-path separator, mark this as the end of our
-      // extension
-      matchedSlash = false;
-      end = i + 1;
-    }
-    if (code === 46 /*.*/) {
-        // If this is our first dot, mark it as the start of our extension
-        if (startDot === -1)
-          startDot = i;
-        else if (preDotState !== 1)
-          preDotState = 1;
-    } else if (startDot !== -1) {
-      // We saw a non-dot and non-path separator before our dot, so we should
-      // have a good chance at having a non-empty extension
-      preDotState = -1;
-    }
-  }
-
-  if (startDot === -1 || end === -1 ||
-      // We saw a non-dot character immediately before the dot
-      preDotState === 0 ||
-      // The (right-most) trimmed path component is exactly '..'
-      preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
-    return '';
-  }
-  return path.slice(startDot, end);
-};
-
-function filter (xs, f) {
-    if (xs.filter) return xs.filter(f);
-    var res = [];
-    for (var i = 0; i < xs.length; i++) {
-        if (f(xs[i], i, xs)) res.push(xs[i]);
-    }
-    return res;
-}
-
-// String.prototype.substr - negative index don't work in IE8
-var substr = 'ab'.substr(-1) === 'b'
-    ? function (str, start, len) { return str.substr(start, len) }
-    : function (str, start, len) {
-        if (start < 0) start = str.length + start;
-        return str.substr(start, len);
-    }
-;
-
-}).call(this)}).call(this,require('_process'))
-},{"_process":187}],187:[function(require,module,exports){
-// shim for using process in browser
-var process = module.exports = {};
-
-// cached from whatever global is present so that test runners that stub it
-// don't break things.  But we need to wrap it in a try catch in case it is
-// wrapped in strict mode code which doesn't define any globals.  It's inside a
-// function because try/catches deoptimize in certain engines.
-
-var cachedSetTimeout;
-var cachedClearTimeout;
-
-function defaultSetTimout() {
-    throw new Error('setTimeout has not been defined');
-}
-function defaultClearTimeout () {
-    throw new Error('clearTimeout has not been defined');
-}
-(function () {
-    try {
-        if (typeof setTimeout === 'function') {
-            cachedSetTimeout = setTimeout;
-        } else {
-            cachedSetTimeout = defaultSetTimout;
-        }
-    } catch (e) {
-        cachedSetTimeout = defaultSetTimout;
-    }
-    try {
-        if (typeof clearTimeout === 'function') {
-            cachedClearTimeout = clearTimeout;
-        } else {
-            cachedClearTimeout = defaultClearTimeout;
-        }
-    } catch (e) {
-        cachedClearTimeout = defaultClearTimeout;
-    }
-} ())
-function runTimeout(fun) {
-    if (cachedSetTimeout === setTimeout) {
-        //normal enviroments in sane situations
-        return setTimeout(fun, 0);
-    }
-    // if setTimeout wasn't available but was latter defined
-    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
-        cachedSetTimeout = setTimeout;
-        return setTimeout(fun, 0);
-    }
-    try {
-        // when when somebody has screwed with setTimeout but no I.E. maddness
-        return cachedSetTimeout(fun, 0);
-    } catch(e){
-        try {
-            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
-            return cachedSetTimeout.call(null, fun, 0);
-        } catch(e){
-            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
-            return cachedSetTimeout.call(this, fun, 0);
-        }
-    }
-
-
-}
-function runClearTimeout(marker) {
-    if (cachedClearTimeout === clearTimeout) {
-        //normal enviroments in sane situations
-        return clearTimeout(marker);
-    }
-    // if clearTimeout wasn't available but was latter defined
-    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
-        cachedClearTimeout = clearTimeout;
-        return clearTimeout(marker);
-    }
-    try {
-        // when when somebody has screwed with setTimeout but no I.E. maddness
-        return cachedClearTimeout(marker);
-    } catch (e){
-        try {
-            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
-            return cachedClearTimeout.call(null, marker);
-        } catch (e){
-            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
-            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
-            return cachedClearTimeout.call(this, marker);
-        }
-    }
-
-
-
-}
-var queue = [];
-var draining = false;
-var currentQueue;
-var queueIndex = -1;
-
-function cleanUpNextTick() {
-    if (!draining || !currentQueue) {
-        return;
-    }
-    draining = false;
-    if (currentQueue.length) {
-        queue = currentQueue.concat(queue);
-    } else {
-        queueIndex = -1;
-    }
-    if (queue.length) {
-        drainQueue();
-    }
-}
-
-function drainQueue() {
-    if (draining) {
-        return;
-    }
-    var timeout = runTimeout(cleanUpNextTick);
-    draining = true;
-
-    var len = queue.length;
-    while(len) {
-        currentQueue = queue;
-        queue = [];
-        while (++queueIndex < len) {
-            if (currentQueue) {
-                currentQueue[queueIndex].run();
-            }
-        }
-        queueIndex = -1;
-        len = queue.length;
-    }
-    currentQueue = null;
-    draining = false;
-    runClearTimeout(timeout);
-}
-
-process.nextTick = function (fun) {
-    var args = new Array(arguments.length - 1);
-    if (arguments.length > 1) {
-        for (var i = 1; i < arguments.length; i++) {
-            args[i - 1] = arguments[i];
-        }
-    }
-    queue.push(new Item(fun, args));
-    if (queue.length === 1 && !draining) {
-        runTimeout(drainQueue);
-    }
-};
-
-// v8 likes predictible objects
-function Item(fun, array) {
-    this.fun = fun;
-    this.array = array;
-}
-Item.prototype.run = function () {
-    this.fun.apply(null, this.array);
-};
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-process.version = ''; // empty string to avoid regexp issues
-process.versions = {};
-
-function noop() {}
-
-process.on = noop;
-process.addListener = noop;
-process.once = noop;
-process.off = noop;
-process.removeListener = noop;
-process.removeAllListeners = noop;
-process.emit = noop;
-process.prependListener = noop;
-process.prependOnceListener = noop;
-
-process.listeners = function (name) { return [] }
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-};
-
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-process.umask = function() { return 0; };
-
-},{}],188:[function(require,module,exports){
+},{}],138:[function(require,module,exports){
 module.exports = function isBuffer(arg) {
   return arg && typeof arg === 'object'
     && typeof arg.copy === 'function'
     && typeof arg.fill === 'function'
     && typeof arg.readUInt8 === 'function';
 }
-},{}],189:[function(require,module,exports){
+},{}],139:[function(require,module,exports){
 (function (process,global){(function (){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -30971,11 +25566,5416 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this)}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":188,"_process":187,"inherits":182}],190:[function(require,module,exports){
-arguments[4][188][0].apply(exports,arguments)
-},{"dup":188}],191:[function(require,module,exports){
-arguments[4][189][0].apply(exports,arguments)
-},{"./support/isBuffer":190,"_process":187,"dup":189,"inherits":183}],"topojson":[function(require,module,exports){
+},{"./support/isBuffer":138,"_process":88,"inherits":35}],140:[function(require,module,exports){
+arguments[4][138][0].apply(exports,arguments)
+},{"dup":138}],141:[function(require,module,exports){
+arguments[4][139][0].apply(exports,arguments)
+},{"./support/isBuffer":140,"_process":88,"dup":139,"inherits":36}],142:[function(require,module,exports){
+module.exports = parse;
+module.exports.parse = parse;
+module.exports.stringify = stringify;
+
+var numberRegexp = /^[-+]?([0-9]*\.[0-9]+|[0-9]+)([eE][-+]?[0-9]+)?/;
+
+ /*
+ * Parse WKT and return GeoJSON.
+ *
+ * @param {string} _ A WKT geometry
+ * @return {?Object} A GeoJSON geometry object
+ */
+function parse(_) {
+    var parts = _.split(";"),
+        _ = parts.pop(),
+        srid = (parts.shift() || "").split("=").pop();
+
+    var i = 0;
+
+    function $(re) {
+        var match = _.substring(i).match(re);
+        if (!match) return null;
+        else {
+            i += match[0].length;
+            return match[0];
+        }
+    }
+
+    function crs(obj) {
+        if (obj && srid.match(/\d+/)) {
+            obj.crs = {
+                type: 'name',
+                properties: {
+                    name: 'urn:ogc:def:crs:EPSG::' + srid
+                }
+            };
+        }
+
+        return obj;
+    }
+
+    function white() { $(/^\s*/); }
+
+    function multicoords() {
+        white();
+        var depth = 0, rings = [], stack = [rings],
+            pointer = rings, elem;
+
+        while (elem =
+            $(/^(\()/) ||
+            $(/^(\))/) ||
+            $(/^(\,)/) ||
+            $(numberRegexp)) {
+            if (elem == '(') {
+                stack.push(pointer);
+                pointer = [];
+                stack[stack.length - 1].push(pointer);
+                depth++;
+            } else if (elem == ')') {
+                pointer = stack.pop();
+                // the stack was empty, input was malformed
+                if (!pointer) return;
+                depth--;
+                if (depth === 0) break;
+            } else if (elem === ',') {
+                pointer = [];
+                stack[stack.length - 1].push(pointer);
+            } else if (!isNaN(parseFloat(elem))) {
+                pointer.push(parseFloat(elem));
+            } else {
+                return null;
+            }
+            white();
+        }
+
+        if (depth !== 0) return null;
+        return rings;
+    }
+
+    function coords() {
+        var list = [], item, pt;
+        while (pt =
+            $(numberRegexp) ||
+            $(/^(\,)/)) {
+            if (pt == ',') {
+                list.push(item);
+                item = [];
+            } else {
+                if (!item) item = [];
+                item.push(parseFloat(pt));
+            }
+            white();
+        }
+        if (item) list.push(item);
+        return list.length ? list : null;
+    }
+
+    function point() {
+        if (!$(/^(point)/i)) return null;
+        white();
+        if (!$(/^(\()/)) return null;
+        var c = coords();
+        if (!c) return null;
+        white();
+        if (!$(/^(\))/)) return null;
+        return {
+            type: 'Point',
+            coordinates: c[0]
+        };
+    }
+
+    function multipoint() {
+        if (!$(/^(multipoint)/i)) return null;
+        white();
+        var c = multicoords();
+        if (!c) return null;
+        white();
+        return {
+            type: 'MultiPoint',
+            coordinates: c
+        };
+    }
+
+    function multilinestring() {
+        if (!$(/^(multilinestring)/i)) return null;
+        white();
+        var c = multicoords();
+        if (!c) return null;
+        white();
+        return {
+            type: 'MultiLineString',
+            coordinates: c
+        };
+    }
+
+    function linestring() {
+        if (!$(/^(linestring)/i)) return null;
+        white();
+        if (!$(/^(\()/)) return null;
+        var c = coords();
+        if (!c) return null;
+        if (!$(/^(\))/)) return null;
+        return {
+            type: 'LineString',
+            coordinates: c
+        };
+    }
+
+    function polygon() {
+        if (!$(/^(polygon)/i)) return null;
+        white();
+        return {
+            type: 'Polygon',
+            coordinates: multicoords()
+        };
+    }
+
+    function multipolygon() {
+        if (!$(/^(multipolygon)/i)) return null;
+        white();
+        return {
+            type: 'MultiPolygon',
+            coordinates: multicoords()
+        };
+    }
+
+    function geometrycollection() {
+        var geometries = [], geometry;
+
+        if (!$(/^(geometrycollection)/i)) return null;
+        white();
+
+        if (!$(/^(\()/)) return null;
+        while (geometry = root()) {
+            geometries.push(geometry);
+            white();
+            $(/^(\,)/);
+            white();
+        }
+        if (!$(/^(\))/)) return null;
+
+        return {
+            type: 'GeometryCollection',
+            geometries: geometries
+        };
+    }
+
+    function root() {
+        return point() ||
+            linestring() ||
+            polygon() ||
+            multipoint() ||
+            multilinestring() ||
+            multipolygon() ||
+            geometrycollection();
+    }
+
+    return crs(root());
+}
+
+/**
+ * Stringifies a GeoJSON object into WKT
+ */
+function stringify(gj) {
+    if (gj.type === 'Feature') {
+        gj = gj.geometry;
+    }
+
+    function pairWKT(c) {
+        if (c.length === 2) {
+            return c[0] + ' ' + c[1];
+        } else if (c.length === 3) {
+            return c[0] + ' ' + c[1] + ' ' + c[2];
+        }
+    }
+
+    function ringWKT(r) {
+        return r.map(pairWKT).join(', ');
+    }
+
+    function ringsWKT(r) {
+        return r.map(ringWKT).map(wrapParens).join(', ');
+    }
+
+    function multiRingsWKT(r) {
+        return r.map(ringsWKT).map(wrapParens).join(', ');
+    }
+
+    function wrapParens(s) { return '(' + s + ')'; }
+
+    switch (gj.type) {
+        case 'Point':
+            return 'POINT (' + pairWKT(gj.coordinates) + ')';
+        case 'LineString':
+            return 'LINESTRING (' + ringWKT(gj.coordinates) + ')';
+        case 'Polygon':
+            return 'POLYGON (' + ringsWKT(gj.coordinates) + ')';
+        case 'MultiPoint':
+            return 'MULTIPOINT (' + ringWKT(gj.coordinates) + ')';
+        case 'MultiPolygon':
+            return 'MULTIPOLYGON (' + multiRingsWKT(gj.coordinates) + ')';
+        case 'MultiLineString':
+            return 'MULTILINESTRING (' + ringsWKT(gj.coordinates) + ')';
+        case 'GeometryCollection':
+            return 'GEOMETRYCOLLECTION (' + gj.geometries.map(stringify).join(', ') + ')';
+        default:
+            throw new Error('stringify requires a valid GeoJSON Feature or geometry object as input');
+    }
+}
+
+},{}],143:[function(require,module,exports){
+module.exports.RADIUS = 6378137;
+module.exports.FLATTENING = 1/298.257223563;
+module.exports.POLAR_RADIUS = 6356752.3142;
+
+},{}],144:[function(require,module,exports){
+(function (Buffer){(function (){
+module.exports = BinaryReader;
+
+function BinaryReader(buffer, isBigEndian) {
+    this.buffer = buffer;
+    this.position = 0;
+    this.isBigEndian = isBigEndian || false;
+}
+
+function _read(readLE, readBE, size) {
+    return function () {
+        var value;
+
+        if (this.isBigEndian)
+            value = readBE.call(this.buffer, this.position);
+        else
+            value = readLE.call(this.buffer, this.position);
+
+        this.position += size;
+
+        return value;
+    };
+}
+
+BinaryReader.prototype.readUInt8 = _read(Buffer.prototype.readUInt8, Buffer.prototype.readUInt8, 1);
+BinaryReader.prototype.readUInt16 = _read(Buffer.prototype.readUInt16LE, Buffer.prototype.readUInt16BE, 2);
+BinaryReader.prototype.readUInt32 = _read(Buffer.prototype.readUInt32LE, Buffer.prototype.readUInt32BE, 4);
+BinaryReader.prototype.readInt8 = _read(Buffer.prototype.readInt8, Buffer.prototype.readInt8, 1);
+BinaryReader.prototype.readInt16 = _read(Buffer.prototype.readInt16LE, Buffer.prototype.readInt16BE, 2);
+BinaryReader.prototype.readInt32 = _read(Buffer.prototype.readInt32LE, Buffer.prototype.readInt32BE, 4);
+BinaryReader.prototype.readFloat = _read(Buffer.prototype.readFloatLE, Buffer.prototype.readFloatBE, 4);
+BinaryReader.prototype.readDouble = _read(Buffer.prototype.readDoubleLE, Buffer.prototype.readDoubleBE, 8);
+
+BinaryReader.prototype.readVarInt = function () {
+    var nextByte,
+        result = 0,
+        bytesRead = 0;
+
+    do {
+        nextByte = this.buffer[this.position + bytesRead];
+        result += (nextByte & 0x7F) << (7 * bytesRead);
+        bytesRead++;
+    } while (nextByte >= 0x80);
+
+    this.position += bytesRead;
+
+    return result;
+};
+
+}).call(this)}).call(this,require("buffer").Buffer)
+},{"buffer":8}],145:[function(require,module,exports){
+(function (Buffer){(function (){
+module.exports = BinaryWriter;
+
+function BinaryWriter(size, allowResize) {
+    this.buffer = new Buffer(size);
+    this.position = 0;
+    this.allowResize = allowResize;
+}
+
+function _write(write, size) {
+    return function (value, noAssert) {
+        this.ensureSize(size);
+
+        write.call(this.buffer, value, this.position, noAssert);
+        this.position += size;
+    };
+}
+
+BinaryWriter.prototype.writeUInt8 = _write(Buffer.prototype.writeUInt8, 1);
+BinaryWriter.prototype.writeUInt16LE = _write(Buffer.prototype.writeUInt16LE, 2);
+BinaryWriter.prototype.writeUInt16BE = _write(Buffer.prototype.writeUInt16BE, 2);
+BinaryWriter.prototype.writeUInt32LE = _write(Buffer.prototype.writeUInt32LE, 4);
+BinaryWriter.prototype.writeUInt32BE = _write(Buffer.prototype.writeUInt32BE, 4);
+BinaryWriter.prototype.writeInt8 = _write(Buffer.prototype.writeInt8, 1);
+BinaryWriter.prototype.writeInt16LE = _write(Buffer.prototype.writeInt16LE, 2);
+BinaryWriter.prototype.writeInt16BE = _write(Buffer.prototype.writeInt16BE, 2);
+BinaryWriter.prototype.writeInt32LE = _write(Buffer.prototype.writeInt32LE, 4);
+BinaryWriter.prototype.writeInt32BE = _write(Buffer.prototype.writeInt32BE, 4);
+BinaryWriter.prototype.writeFloatLE = _write(Buffer.prototype.writeFloatLE, 4);
+BinaryWriter.prototype.writeFloatBE = _write(Buffer.prototype.writeFloatBE, 4);
+BinaryWriter.prototype.writeDoubleLE = _write(Buffer.prototype.writeDoubleLE, 8);
+BinaryWriter.prototype.writeDoubleBE = _write(Buffer.prototype.writeDoubleBE, 8);
+
+BinaryWriter.prototype.writeBuffer = function (buffer) {
+    this.ensureSize(buffer.length);
+
+    buffer.copy(this.buffer, this.position, 0, buffer.length);
+    this.position += buffer.length;
+};
+
+BinaryWriter.prototype.writeVarInt = function (value) {
+    var length = 1;
+
+    while ((value & 0xFFFFFF80) !== 0) {
+        this.writeUInt8((value & 0x7F) | 0x80);
+        value >>>= 7;
+        length++;
+    }
+
+    this.writeUInt8(value & 0x7F);
+
+    return length;
+};
+
+BinaryWriter.prototype.ensureSize = function (size) {
+    if (this.buffer.length < this.position + size) {
+        if (this.allowResize) {
+            var tempBuffer = new Buffer(this.position + size);
+            this.buffer.copy(tempBuffer, 0, 0, this.buffer.length);
+            this.buffer = tempBuffer;
+        }
+        else {
+            throw new RangeError('index out of range');
+        }
+    }
+};
+
+}).call(this)}).call(this,require("buffer").Buffer)
+},{"buffer":8}],146:[function(require,module,exports){
+(function (Buffer){(function (){
+module.exports = Geometry;
+
+var Types = require('./types');
+var Point = require('./point');
+var LineString = require('./linestring');
+var Polygon = require('./polygon');
+var MultiPoint = require('./multipoint');
+var MultiLineString = require('./multilinestring');
+var MultiPolygon = require('./multipolygon');
+var GeometryCollection = require('./geometrycollection');
+var BinaryReader = require('./binaryreader');
+var BinaryWriter = require('./binarywriter');
+var WktParser = require('./wktparser');
+var ZigZag = require('./zigzag.js');
+
+function Geometry() {
+    this.srid = undefined;
+    this.hasZ = false;
+    this.hasM = false;
+}
+
+Geometry.parse = function (value, options) {
+    var valueType = typeof value;
+
+    if (valueType === 'string' || value instanceof WktParser)
+        return Geometry._parseWkt(value);
+    else if (Buffer.isBuffer(value) || value instanceof BinaryReader)
+        return Geometry._parseWkb(value, options);
+    else
+        throw new Error('first argument must be a string or Buffer');
+};
+
+Geometry._parseWkt = function (value) {
+    var wktParser,
+        srid;
+
+    if (value instanceof WktParser)
+        wktParser = value;
+    else
+        wktParser = new WktParser(value);
+
+    var match = wktParser.matchRegex([/^SRID=(\d+);/]);
+    if (match)
+        srid = parseInt(match[1], 10);
+
+    var geometryType = wktParser.matchType();
+    var dimension = wktParser.matchDimension();
+
+    var options = {
+        srid: srid,
+        hasZ: dimension.hasZ,
+        hasM: dimension.hasM
+    };
+
+    switch (geometryType) {
+        case Types.wkt.Point:
+            return Point._parseWkt(wktParser, options);
+        case Types.wkt.LineString:
+            return LineString._parseWkt(wktParser, options);
+        case Types.wkt.Polygon:
+            return Polygon._parseWkt(wktParser, options);
+        case Types.wkt.MultiPoint:
+            return MultiPoint._parseWkt(wktParser, options);
+        case Types.wkt.MultiLineString:
+            return MultiLineString._parseWkt(wktParser, options);
+        case Types.wkt.MultiPolygon:
+            return MultiPolygon._parseWkt(wktParser, options);
+        case Types.wkt.GeometryCollection:
+            return GeometryCollection._parseWkt(wktParser, options);
+    }
+};
+
+Geometry._parseWkb = function (value, parentOptions) {
+    var binaryReader,
+        wkbType,
+        geometryType,
+        options = {};
+
+    if (value instanceof BinaryReader)
+        binaryReader = value;
+    else
+        binaryReader = new BinaryReader(value);
+
+    binaryReader.isBigEndian = !binaryReader.readInt8();
+
+    wkbType = binaryReader.readUInt32();
+
+    options.hasSrid = (wkbType & 0x20000000) === 0x20000000;
+    options.isEwkb = (wkbType & 0x20000000) || (wkbType & 0x40000000) || (wkbType & 0x80000000);
+
+    if (options.hasSrid)
+        options.srid = binaryReader.readUInt32();
+
+    options.hasZ = false;
+    options.hasM = false;
+
+    if (!options.isEwkb && (!parentOptions || !parentOptions.isEwkb)) {
+        if (wkbType >= 1000 && wkbType < 2000) {
+            options.hasZ = true;
+            geometryType = wkbType - 1000;
+        }
+        else if (wkbType >= 2000 && wkbType < 3000) {
+            options.hasM = true;
+            geometryType = wkbType - 2000;
+        }
+        else if (wkbType >= 3000 && wkbType < 4000) {
+            options.hasZ = true;
+            options.hasM = true;
+            geometryType = wkbType - 3000;
+        }
+        else {
+            geometryType = wkbType;
+        }
+    }
+    else {
+        if (wkbType & 0x80000000)
+            options.hasZ = true;
+        if (wkbType & 0x40000000)
+            options.hasM = true;
+
+        geometryType = wkbType & 0xF;
+    }
+
+    switch (geometryType) {
+        case Types.wkb.Point:
+            return Point._parseWkb(binaryReader, options);
+        case Types.wkb.LineString:
+            return LineString._parseWkb(binaryReader, options);
+        case Types.wkb.Polygon:
+            return Polygon._parseWkb(binaryReader, options);
+        case Types.wkb.MultiPoint:
+            return MultiPoint._parseWkb(binaryReader, options);
+        case Types.wkb.MultiLineString:
+            return MultiLineString._parseWkb(binaryReader, options);
+        case Types.wkb.MultiPolygon:
+            return MultiPolygon._parseWkb(binaryReader, options);
+        case Types.wkb.GeometryCollection:
+            return GeometryCollection._parseWkb(binaryReader, options);
+        default:
+            throw new Error('GeometryType ' + geometryType + ' not supported');
+    }
+};
+
+Geometry.parseTwkb = function (value) {
+    var binaryReader,
+        options = {};
+
+    if (value instanceof BinaryReader)
+        binaryReader = value;
+    else
+        binaryReader = new BinaryReader(value);
+
+    var type = binaryReader.readUInt8();
+    var metadataHeader = binaryReader.readUInt8();
+
+    var geometryType = type & 0x0F;
+    options.precision = ZigZag.decode(type >> 4);
+    options.precisionFactor = Math.pow(10, options.precision);
+
+    options.hasBoundingBox = metadataHeader >> 0 & 1;
+    options.hasSizeAttribute = metadataHeader >> 1 & 1;
+    options.hasIdList = metadataHeader >> 2 & 1;
+    options.hasExtendedPrecision = metadataHeader >> 3 & 1;
+    options.isEmpty = metadataHeader >> 4 & 1;
+
+    if (options.hasExtendedPrecision) {
+        var extendedPrecision = binaryReader.readUInt8();
+        options.hasZ = (extendedPrecision & 0x01) === 0x01;
+        options.hasM = (extendedPrecision & 0x02) === 0x02;
+
+        options.zPrecision = ZigZag.decode((extendedPrecision & 0x1C) >> 2);
+        options.zPrecisionFactor = Math.pow(10, options.zPrecision);
+
+        options.mPrecision = ZigZag.decode((extendedPrecision & 0xE0) >> 5);
+        options.mPrecisionFactor = Math.pow(10, options.mPrecision);
+    }
+    else {
+        options.hasZ = false;
+        options.hasM = false;
+    }
+
+    if (options.hasSizeAttribute)
+        binaryReader.readVarInt();
+    if (options.hasBoundingBox) {
+        var dimensions = 2;
+
+        if (options.hasZ)
+            dimensions++;
+        if (options.hasM)
+            dimensions++;
+
+        for (var i = 0; i < dimensions; i++) {
+            binaryReader.readVarInt();
+            binaryReader.readVarInt();
+        }
+    }
+
+    switch (geometryType) {
+        case Types.wkb.Point:
+            return Point._parseTwkb(binaryReader, options);
+        case Types.wkb.LineString:
+            return LineString._parseTwkb(binaryReader, options);
+        case Types.wkb.Polygon:
+            return Polygon._parseTwkb(binaryReader, options);
+        case Types.wkb.MultiPoint:
+            return MultiPoint._parseTwkb(binaryReader, options);
+        case Types.wkb.MultiLineString:
+            return MultiLineString._parseTwkb(binaryReader, options);
+        case Types.wkb.MultiPolygon:
+            return MultiPolygon._parseTwkb(binaryReader, options);
+        case Types.wkb.GeometryCollection:
+            return GeometryCollection._parseTwkb(binaryReader, options);
+        default:
+            throw new Error('GeometryType ' + geometryType + ' not supported');
+    }
+};
+
+Geometry.parseGeoJSON = function (value) {
+    return Geometry._parseGeoJSON(value);
+};
+
+Geometry._parseGeoJSON = function (value, isSubGeometry) {
+    var geometry;
+
+    switch (value.type) {
+        case Types.geoJSON.Point:
+            geometry = Point._parseGeoJSON(value); break;
+        case Types.geoJSON.LineString:
+            geometry = LineString._parseGeoJSON(value); break;
+        case Types.geoJSON.Polygon:
+            geometry = Polygon._parseGeoJSON(value); break;
+        case Types.geoJSON.MultiPoint:
+            geometry = MultiPoint._parseGeoJSON(value); break;
+        case Types.geoJSON.MultiLineString:
+            geometry = MultiLineString._parseGeoJSON(value); break;
+        case Types.geoJSON.MultiPolygon:
+            geometry = MultiPolygon._parseGeoJSON(value); break;
+        case Types.geoJSON.GeometryCollection:
+            geometry = GeometryCollection._parseGeoJSON(value); break;
+        default:
+            throw new Error('GeometryType ' + value.type + ' not supported');
+    }
+
+    if (value.crs && value.crs.type && value.crs.type === 'name' && value.crs.properties && value.crs.properties.name) {
+        var crs = value.crs.properties.name;
+
+        if (crs.indexOf('EPSG:') === 0)
+            geometry.srid = parseInt(crs.substring(5));
+        else if (crs.indexOf('urn:ogc:def:crs:EPSG::') === 0)
+            geometry.srid = parseInt(crs.substring(22));
+        else
+            throw new Error('Unsupported crs: ' + crs);
+    }
+    else if (!isSubGeometry) {
+        geometry.srid = 4326;
+    }
+
+    return geometry;
+};
+
+Geometry.prototype.toEwkt = function () {
+    return 'SRID=' + this.srid + ';' + this.toWkt();
+};
+
+Geometry.prototype.toEwkb = function () {
+    var ewkb = new BinaryWriter(this._getWkbSize() + 4);
+    var wkb = this.toWkb();
+
+    ewkb.writeInt8(1);
+    ewkb.writeUInt32LE((wkb.slice(1, 5).readUInt32LE(0) | 0x20000000) >>> 0, true);
+    ewkb.writeUInt32LE(this.srid);
+
+    ewkb.writeBuffer(wkb.slice(5));
+
+    return ewkb.buffer;
+};
+
+Geometry.prototype._getWktType = function (wktType, isEmpty) {
+    var wkt = wktType;
+
+    if (this.hasZ && this.hasM)
+        wkt += ' ZM ';
+    else if (this.hasZ)
+        wkt += ' Z ';
+    else if (this.hasM)
+        wkt += ' M ';
+
+    if (isEmpty && !this.hasZ && !this.hasM)
+        wkt += ' ';
+
+    if (isEmpty)
+        wkt += 'EMPTY';
+
+    return wkt;
+};
+
+Geometry.prototype._getWktCoordinate = function (point) {
+    var coordinates = point.x + ' ' + point.y;
+
+    if (this.hasZ)
+        coordinates += ' ' + point.z;
+    if (this.hasM)
+        coordinates += ' ' + point.m;
+
+    return coordinates;
+};
+
+Geometry.prototype._writeWkbType = function (wkb, geometryType, parentOptions) {
+    var dimensionType = 0;
+
+    if (typeof this.srid === 'undefined' && (!parentOptions || typeof parentOptions.srid === 'undefined')) {
+        if (this.hasZ && this.hasM)
+            dimensionType += 3000;
+        else if (this.hasZ)
+            dimensionType += 1000;
+        else if (this.hasM)
+            dimensionType += 2000;
+    }
+    else {
+        if (this.hasZ)
+            dimensionType |= 0x80000000;
+        if (this.hasM)
+            dimensionType |= 0x40000000;
+    }
+
+    wkb.writeUInt32LE((dimensionType + geometryType) >>> 0, true);
+};
+
+Geometry.getTwkbPrecision = function (xyPrecision, zPrecision, mPrecision) {
+    return {
+        xy: xyPrecision,
+        z: zPrecision,
+        m: mPrecision,
+        xyFactor: Math.pow(10, xyPrecision),
+        zFactor: Math.pow(10, zPrecision),
+        mFactor: Math.pow(10, mPrecision)
+    };
+};
+
+Geometry.prototype._writeTwkbHeader = function (twkb, geometryType, precision, isEmpty) {
+    var type = (ZigZag.encode(precision.xy) << 4) + geometryType;
+    var metadataHeader = (this.hasZ || this.hasM) << 3;
+    metadataHeader += isEmpty << 4;
+
+    twkb.writeUInt8(type);
+    twkb.writeUInt8(metadataHeader);
+
+    if (this.hasZ || this.hasM) {
+        var extendedPrecision = 0;
+        if (this.hasZ)
+            extendedPrecision |= 0x1;
+        if (this.hasM)
+            extendedPrecision |= 0x2;
+
+        twkb.writeUInt8(extendedPrecision);
+    }
+};
+
+Geometry.prototype.toGeoJSON = function (options) {
+    var geoJSON = {};
+
+    if (this.srid) {
+        if (options) {
+            if (options.shortCrs) {
+                geoJSON.crs = {
+                    type: 'name',
+                    properties: {
+                        name: 'EPSG:' + this.srid
+                    }
+                };
+            }
+            else if (options.longCrs) {
+                geoJSON.crs = {
+                    type: 'name',
+                    properties: {
+                        name: 'urn:ogc:def:crs:EPSG::' + this.srid
+                    }
+                };
+            }
+        }
+    }
+
+    return geoJSON;
+};
+
+}).call(this)}).call(this,{"isBuffer":require("../../_is-buffer@1.1.6@is-buffer/index.js")})
+},{"../../_is-buffer@1.1.6@is-buffer/index.js":37,"./binaryreader":144,"./binarywriter":145,"./geometrycollection":147,"./linestring":148,"./multilinestring":149,"./multipoint":150,"./multipolygon":151,"./point":152,"./polygon":153,"./types":154,"./wktparser":155,"./zigzag.js":157}],147:[function(require,module,exports){
+module.exports = GeometryCollection;
+
+var util = require('util');
+
+var Types = require('./types');
+var Geometry = require('./geometry');
+var BinaryWriter = require('./binarywriter');
+
+function GeometryCollection(geometries, srid) {
+    Geometry.call(this);
+
+    this.geometries = geometries || [];
+	this.srid = srid;
+
+    if (this.geometries.length > 0) {
+        this.hasZ = this.geometries[0].hasZ;
+        this.hasM = this.geometries[0].hasM;
+    }
+}
+
+util.inherits(GeometryCollection, Geometry);
+
+GeometryCollection.Z = function (geometries, srid) {
+    var geometryCollection = new GeometryCollection(geometries, srid);
+    geometryCollection.hasZ = true;
+    return geometryCollection;
+};
+
+GeometryCollection.M = function (geometries, srid) {
+    var geometryCollection = new GeometryCollection(geometries, srid);
+    geometryCollection.hasM = true;
+    return geometryCollection;
+};
+
+GeometryCollection.ZM = function (geometries, srid) {
+    var geometryCollection = new GeometryCollection(geometries, srid);
+    geometryCollection.hasZ = true;
+    geometryCollection.hasM = true;
+    return geometryCollection;
+};
+
+GeometryCollection._parseWkt = function (value, options) {
+    var geometryCollection = new GeometryCollection();
+    geometryCollection.srid = options.srid;
+    geometryCollection.hasZ = options.hasZ;
+    geometryCollection.hasM = options.hasM;
+
+    if (value.isMatch(['EMPTY']))
+        return geometryCollection;
+
+    value.expectGroupStart();
+
+    do {
+        geometryCollection.geometries.push(Geometry.parse(value));
+    } while (value.isMatch([',']));
+
+    value.expectGroupEnd();
+
+    return geometryCollection;
+};
+
+GeometryCollection._parseWkb = function (value, options) {
+    var geometryCollection = new GeometryCollection();
+    geometryCollection.srid = options.srid;
+    geometryCollection.hasZ = options.hasZ;
+    geometryCollection.hasM = options.hasM;
+
+    var geometryCount = value.readUInt32();
+
+    for (var i = 0; i < geometryCount; i++)
+        geometryCollection.geometries.push(Geometry.parse(value, options));
+
+    return geometryCollection;
+};
+
+GeometryCollection._parseTwkb = function (value, options) {
+    var geometryCollection = new GeometryCollection();
+    geometryCollection.hasZ = options.hasZ;
+    geometryCollection.hasM = options.hasM;
+
+    if (options.isEmpty)
+        return geometryCollection;
+
+    var geometryCount = value.readVarInt();
+
+    for (var i = 0; i < geometryCount; i++)
+        geometryCollection.geometries.push(Geometry.parseTwkb(value));
+
+    return geometryCollection;
+};
+
+GeometryCollection._parseGeoJSON = function (value) {
+    var geometryCollection = new GeometryCollection();
+
+    for (var i = 0; i < value.geometries.length; i++)
+        geometryCollection.geometries.push(Geometry._parseGeoJSON(value.geometries[i], true));
+
+    if (geometryCollection.geometries.length > 0)
+        geometryCollection.hasZ = geometryCollection.geometries[0].hasZ;
+
+    return geometryCollection;
+};
+
+GeometryCollection.prototype.toWkt = function () {
+    if (this.geometries.length === 0)
+        return this._getWktType(Types.wkt.GeometryCollection, true);
+
+    var wkt = this._getWktType(Types.wkt.GeometryCollection, false) + '(';
+
+    for (var i = 0; i < this.geometries.length; i++)
+        wkt += this.geometries[i].toWkt() + ',';
+
+    wkt = wkt.slice(0, -1);
+    wkt += ')';
+
+    return wkt;
+};
+
+GeometryCollection.prototype.toWkb = function () {
+    var wkb = new BinaryWriter(this._getWkbSize());
+
+    wkb.writeInt8(1);
+
+    this._writeWkbType(wkb, Types.wkb.GeometryCollection);
+    wkb.writeUInt32LE(this.geometries.length);
+
+    for (var i = 0; i < this.geometries.length; i++)
+        wkb.writeBuffer(this.geometries[i].toWkb({ srid: this.srid }));
+
+    return wkb.buffer;
+};
+
+GeometryCollection.prototype.toTwkb = function () {
+    var twkb = new BinaryWriter(0, true);
+
+    var precision = Geometry.getTwkbPrecision(5, 0, 0);
+    var isEmpty = this.geometries.length === 0;
+
+    this._writeTwkbHeader(twkb, Types.wkb.GeometryCollection, precision, isEmpty);
+
+    if (this.geometries.length > 0) {
+        twkb.writeVarInt(this.geometries.length);
+
+        for (var i = 0; i < this.geometries.length; i++)
+            twkb.writeBuffer(this.geometries[i].toTwkb());
+    }
+
+    return twkb.buffer;
+};
+
+GeometryCollection.prototype._getWkbSize = function () {
+    var size = 1 + 4 + 4;
+
+    for (var i = 0; i < this.geometries.length; i++)
+        size += this.geometries[i]._getWkbSize();
+
+    return size;
+};
+
+GeometryCollection.prototype.toGeoJSON = function (options) {
+    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
+    geoJSON.type = Types.geoJSON.GeometryCollection;
+    geoJSON.geometries = [];
+
+    for (var i = 0; i < this.geometries.length; i++)
+        geoJSON.geometries.push(this.geometries[i].toGeoJSON());
+
+    return geoJSON;
+};
+
+},{"./binarywriter":145,"./geometry":146,"./types":154,"util":141}],148:[function(require,module,exports){
+module.exports = LineString;
+
+var util = require('util');
+
+var Geometry = require('./geometry');
+var Types = require('./types');
+var Point = require('./point');
+var BinaryWriter = require('./binarywriter');
+
+function LineString(points, srid) {
+    Geometry.call(this);
+
+    this.points = points || [];
+	this.srid = srid;
+
+    if (this.points.length > 0) {
+        this.hasZ = this.points[0].hasZ;
+        this.hasM = this.points[0].hasM;
+    }
+}
+
+util.inherits(LineString, Geometry);
+
+LineString.Z = function (points, srid) {
+    var lineString = new LineString(points, srid);
+    lineString.hasZ = true;
+    return lineString;
+};
+
+LineString.M = function (points, srid) {
+    var lineString = new LineString(points, srid);
+    lineString.hasM = true;
+    return lineString;
+};
+
+LineString.ZM = function (points, srid) {
+    var lineString = new LineString(points, srid);
+    lineString.hasZ = true;
+    lineString.hasM = true;
+    return lineString;
+};
+
+LineString._parseWkt = function (value, options) {
+    var lineString = new LineString();
+    lineString.srid = options.srid;
+    lineString.hasZ = options.hasZ;
+    lineString.hasM = options.hasM;
+
+    if (value.isMatch(['EMPTY']))
+        return lineString;
+
+    value.expectGroupStart();
+    lineString.points.push.apply(lineString.points, value.matchCoordinates(options));
+    value.expectGroupEnd();
+
+    return lineString;
+};
+
+LineString._parseWkb = function (value, options) {
+    var lineString = new LineString();
+    lineString.srid = options.srid;
+    lineString.hasZ = options.hasZ;
+    lineString.hasM = options.hasM;
+
+    var pointCount = value.readUInt32();
+
+    for (var i = 0; i < pointCount; i++)
+        lineString.points.push(Point._readWkbPoint(value, options));
+
+    return lineString;
+};
+
+LineString._parseTwkb = function (value, options) {
+    var lineString = new LineString();
+    lineString.hasZ = options.hasZ;
+    lineString.hasM = options.hasM;
+
+    if (options.isEmpty)
+        return lineString;
+
+    var previousPoint = new Point(0, 0, options.hasZ ? 0 : undefined, options.hasM ? 0 : undefined);
+    var pointCount = value.readVarInt();
+
+    for (var i = 0; i < pointCount; i++)
+        lineString.points.push(Point._readTwkbPoint(value, options, previousPoint));
+
+    return lineString;
+};
+
+LineString._parseGeoJSON = function (value) {
+    var lineString = new LineString();
+
+    if (value.coordinates.length > 0)
+        lineString.hasZ = value.coordinates[0].length > 2;
+
+    for (var i = 0; i < value.coordinates.length; i++)
+        lineString.points.push(Point._readGeoJSONPoint(value.coordinates[i]));
+
+    return lineString;
+};
+
+LineString.prototype.toWkt = function () {
+    if (this.points.length === 0)
+        return this._getWktType(Types.wkt.LineString, true);
+
+    return this._getWktType(Types.wkt.LineString, false) + this._toInnerWkt();
+};
+
+LineString.prototype._toInnerWkt = function () {
+    var innerWkt = '(';
+
+    for (var i = 0; i < this.points.length; i++)
+        innerWkt += this._getWktCoordinate(this.points[i]) + ',';
+
+    innerWkt = innerWkt.slice(0, -1);
+    innerWkt += ')';
+
+    return innerWkt;
+};
+
+LineString.prototype.toWkb = function (parentOptions) {
+    var wkb = new BinaryWriter(this._getWkbSize());
+
+    wkb.writeInt8(1);
+
+    this._writeWkbType(wkb, Types.wkb.LineString, parentOptions);
+    wkb.writeUInt32LE(this.points.length);
+
+    for (var i = 0; i < this.points.length; i++)
+        this.points[i]._writeWkbPoint(wkb);
+
+    return wkb.buffer;
+};
+
+LineString.prototype.toTwkb = function () {
+    var twkb = new BinaryWriter(0, true);
+
+    var precision = Geometry.getTwkbPrecision(5, 0, 0);
+    var isEmpty = this.points.length === 0;
+
+    this._writeTwkbHeader(twkb, Types.wkb.LineString, precision, isEmpty);
+
+    if (this.points.length > 0) {
+        twkb.writeVarInt(this.points.length);
+
+        var previousPoint = new Point(0, 0, 0, 0);
+        for (var i = 0; i < this.points.length; i++)
+            this.points[i]._writeTwkbPoint(twkb, precision, previousPoint);
+    }
+
+    return twkb.buffer;
+};
+
+LineString.prototype._getWkbSize = function () {
+    var coordinateSize = 16;
+
+    if (this.hasZ)
+        coordinateSize += 8;
+    if (this.hasM)
+        coordinateSize += 8;
+
+    return 1 + 4 + 4 + (this.points.length * coordinateSize);
+};
+
+LineString.prototype.toGeoJSON = function (options) {
+    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
+    geoJSON.type = Types.geoJSON.LineString;
+    geoJSON.coordinates = [];
+
+    for (var i = 0; i < this.points.length; i++) {
+        if (this.hasZ)
+            geoJSON.coordinates.push([this.points[i].x, this.points[i].y, this.points[i].z]);
+        else
+            geoJSON.coordinates.push([this.points[i].x, this.points[i].y]);
+    }
+
+    return geoJSON;
+};
+
+},{"./binarywriter":145,"./geometry":146,"./point":152,"./types":154,"util":141}],149:[function(require,module,exports){
+module.exports = MultiLineString;
+
+var util = require('util');
+
+var Types = require('./types');
+var Geometry = require('./geometry');
+var Point = require('./point');
+var LineString = require('./linestring');
+var BinaryWriter = require('./binarywriter');
+
+function MultiLineString(lineStrings, srid) {
+    Geometry.call(this);
+
+    this.lineStrings = lineStrings || [];
+	this.srid = srid;
+
+    if (this.lineStrings.length > 0) {
+        this.hasZ = this.lineStrings[0].hasZ;
+        this.hasM = this.lineStrings[0].hasM;
+    }
+}
+
+util.inherits(MultiLineString, Geometry);
+
+MultiLineString.Z = function (lineStrings, srid) {
+    var multiLineString = new MultiLineString(lineStrings, srid);
+    multiLineString.hasZ = true;
+    return multiLineString;
+};
+
+MultiLineString.M = function (lineStrings, srid) {
+    var multiLineString = new MultiLineString(lineStrings, srid);
+    multiLineString.hasM = true;
+    return multiLineString;
+};
+
+MultiLineString.ZM = function (lineStrings, srid) {
+    var multiLineString = new MultiLineString(lineStrings, srid);
+    multiLineString.hasZ = true;
+    multiLineString.hasM = true;
+    return multiLineString;
+};
+
+MultiLineString._parseWkt = function (value, options) {
+    var multiLineString = new MultiLineString();
+    multiLineString.srid = options.srid;
+    multiLineString.hasZ = options.hasZ;
+    multiLineString.hasM = options.hasM;
+
+    if (value.isMatch(['EMPTY']))
+        return multiLineString;
+
+    value.expectGroupStart();
+
+    do {
+        value.expectGroupStart();
+        multiLineString.lineStrings.push(new LineString(value.matchCoordinates(options)));
+        value.expectGroupEnd();
+    } while (value.isMatch([',']));
+
+    value.expectGroupEnd();
+
+    return multiLineString;
+};
+
+MultiLineString._parseWkb = function (value, options) {
+    var multiLineString = new MultiLineString();
+    multiLineString.srid = options.srid;
+    multiLineString.hasZ = options.hasZ;
+    multiLineString.hasM = options.hasM;
+
+    var lineStringCount = value.readUInt32();
+
+    for (var i = 0; i < lineStringCount; i++)
+        multiLineString.lineStrings.push(Geometry.parse(value, options));
+
+    return multiLineString;
+};
+
+MultiLineString._parseTwkb = function (value, options) {
+    var multiLineString = new MultiLineString();
+    multiLineString.hasZ = options.hasZ;
+    multiLineString.hasM = options.hasM;
+
+    if (options.isEmpty)
+        return multiLineString;
+
+    var previousPoint = new Point(0, 0, options.hasZ ? 0 : undefined, options.hasM ? 0 : undefined);
+    var lineStringCount = value.readVarInt();
+
+    for (var i = 0; i < lineStringCount; i++) {
+        var lineString = new LineString();
+        lineString.hasZ = options.hasZ;
+        lineString.hasM = options.hasM;
+
+        var pointCount = value.readVarInt();
+
+        for (var j = 0; j < pointCount; j++)
+            lineString.points.push(Point._readTwkbPoint(value, options, previousPoint));
+
+        multiLineString.lineStrings.push(lineString);
+    }
+
+    return multiLineString;
+};
+
+MultiLineString._parseGeoJSON = function (value) {
+    var multiLineString = new MultiLineString();
+
+    if (value.coordinates.length > 0 && value.coordinates[0].length > 0)
+        multiLineString.hasZ = value.coordinates[0][0].length > 2;
+
+    for (var i = 0; i < value.coordinates.length; i++)
+        multiLineString.lineStrings.push(LineString._parseGeoJSON({ coordinates: value.coordinates[i] }));
+
+    return multiLineString;
+};
+
+MultiLineString.prototype.toWkt = function () {
+    if (this.lineStrings.length === 0)
+        return this._getWktType(Types.wkt.MultiLineString, true);
+
+    var wkt = this._getWktType(Types.wkt.MultiLineString, false) + '(';
+
+    for (var i = 0; i < this.lineStrings.length; i++)
+        wkt += this.lineStrings[i]._toInnerWkt() + ',';
+
+    wkt = wkt.slice(0, -1);
+    wkt += ')';
+
+    return wkt;
+};
+
+MultiLineString.prototype.toWkb = function () {
+    var wkb = new BinaryWriter(this._getWkbSize());
+
+    wkb.writeInt8(1);
+
+    this._writeWkbType(wkb, Types.wkb.MultiLineString);
+    wkb.writeUInt32LE(this.lineStrings.length);
+
+    for (var i = 0; i < this.lineStrings.length; i++)
+        wkb.writeBuffer(this.lineStrings[i].toWkb({ srid: this.srid }));
+
+    return wkb.buffer;
+};
+
+MultiLineString.prototype.toTwkb = function () {
+    var twkb = new BinaryWriter(0, true);
+
+    var precision = Geometry.getTwkbPrecision(5, 0, 0);
+    var isEmpty = this.lineStrings.length === 0;
+
+    this._writeTwkbHeader(twkb, Types.wkb.MultiLineString, precision, isEmpty);
+
+    if (this.lineStrings.length > 0) {
+        twkb.writeVarInt(this.lineStrings.length);
+
+        var previousPoint = new Point(0, 0, 0, 0);
+        for (var i = 0; i < this.lineStrings.length; i++) {
+            twkb.writeVarInt(this.lineStrings[i].points.length);
+
+            for (var j = 0; j < this.lineStrings[i].points.length; j++)
+                this.lineStrings[i].points[j]._writeTwkbPoint(twkb, precision, previousPoint);
+        }
+    }
+
+    return twkb.buffer;
+};
+
+MultiLineString.prototype._getWkbSize = function () {
+    var size = 1 + 4 + 4;
+
+    for (var i = 0; i < this.lineStrings.length; i++)
+        size += this.lineStrings[i]._getWkbSize();
+
+    return size;
+};
+
+MultiLineString.prototype.toGeoJSON = function (options) {
+    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
+    geoJSON.type = Types.geoJSON.MultiLineString;
+    geoJSON.coordinates = [];
+
+    for (var i = 0; i < this.lineStrings.length; i++)
+        geoJSON.coordinates.push(this.lineStrings[i].toGeoJSON().coordinates);
+
+    return geoJSON;
+};
+
+},{"./binarywriter":145,"./geometry":146,"./linestring":148,"./point":152,"./types":154,"util":141}],150:[function(require,module,exports){
+module.exports = MultiPoint;
+
+var util = require('util');
+
+var Types = require('./types');
+var Geometry = require('./geometry');
+var Point = require('./point');
+var BinaryWriter = require('./binarywriter');
+
+function MultiPoint(points, srid) {
+    Geometry.call(this);
+
+    this.points = points || [];
+	this.srid = srid;
+	
+    if (this.points.length > 0) {
+        this.hasZ = this.points[0].hasZ;
+        this.hasM = this.points[0].hasM;
+    }
+}
+
+util.inherits(MultiPoint, Geometry);
+
+MultiPoint.Z = function (points, srid) {
+    var multiPoint = new MultiPoint(points, srid);
+    multiPoint.hasZ = true;
+    return multiPoint;
+};
+
+MultiPoint.M = function (points, srid) {
+    var multiPoint = new MultiPoint(points, srid);
+    multiPoint.hasM = true;
+    return multiPoint;
+};
+
+MultiPoint.ZM = function (points, srid) {
+    var multiPoint = new MultiPoint(points, srid);
+    multiPoint.hasZ = true;
+    multiPoint.hasM = true;
+    return multiPoint;
+};
+
+MultiPoint._parseWkt = function (value, options) {
+    var multiPoint = new MultiPoint();
+    multiPoint.srid = options.srid;
+    multiPoint.hasZ = options.hasZ;
+    multiPoint.hasM = options.hasM;
+
+    if (value.isMatch(['EMPTY']))
+        return multiPoint;
+
+    value.expectGroupStart();
+    multiPoint.points.push.apply(multiPoint.points, value.matchCoordinates(options));
+    value.expectGroupEnd();
+
+    return multiPoint;
+};
+
+MultiPoint._parseWkb = function (value, options) {
+    var multiPoint = new MultiPoint();
+    multiPoint.srid = options.srid;
+    multiPoint.hasZ = options.hasZ;
+    multiPoint.hasM = options.hasM;
+
+    var pointCount = value.readUInt32();
+
+    for (var i = 0; i < pointCount; i++)
+        multiPoint.points.push(Geometry.parse(value, options));
+
+    return multiPoint;
+};
+
+MultiPoint._parseTwkb = function (value, options) {
+    var multiPoint = new MultiPoint();
+    multiPoint.hasZ = options.hasZ;
+    multiPoint.hasM = options.hasM;
+
+    if (options.isEmpty)
+        return multiPoint;
+
+    var previousPoint = new Point(0, 0, options.hasZ ? 0 : undefined, options.hasM ? 0 : undefined);
+    var pointCount = value.readVarInt();
+
+    for (var i = 0; i < pointCount; i++)
+        multiPoint.points.push(Point._readTwkbPoint(value, options, previousPoint));
+
+    return multiPoint;
+};
+
+MultiPoint._parseGeoJSON = function (value) {
+    var multiPoint = new MultiPoint();
+
+    if (value.coordinates.length > 0)
+        multiPoint.hasZ = value.coordinates[0].length > 2;
+
+    for (var i = 0; i < value.coordinates.length; i++)
+        multiPoint.points.push(Point._parseGeoJSON({ coordinates: value.coordinates[i] }));
+
+    return multiPoint;
+};
+
+MultiPoint.prototype.toWkt = function () {
+    if (this.points.length === 0)
+        return this._getWktType(Types.wkt.MultiPoint, true);
+
+    var wkt = this._getWktType(Types.wkt.MultiPoint, false) + '(';
+
+    for (var i = 0; i < this.points.length; i++)
+        wkt += this._getWktCoordinate(this.points[i]) + ',';
+
+    wkt = wkt.slice(0, -1);
+    wkt += ')';
+
+    return wkt;
+};
+
+MultiPoint.prototype.toWkb = function () {
+    var wkb = new BinaryWriter(this._getWkbSize());
+
+    wkb.writeInt8(1);
+
+    this._writeWkbType(wkb, Types.wkb.MultiPoint);
+    wkb.writeUInt32LE(this.points.length);
+
+    for (var i = 0; i < this.points.length; i++)
+        wkb.writeBuffer(this.points[i].toWkb({ srid: this.srid }));
+
+    return wkb.buffer;
+};
+
+MultiPoint.prototype.toTwkb = function () {
+    var twkb = new BinaryWriter(0, true);
+
+    var precision = Geometry.getTwkbPrecision(5, 0, 0);
+    var isEmpty = this.points.length === 0;
+
+    this._writeTwkbHeader(twkb, Types.wkb.MultiPoint, precision, isEmpty);
+
+    if (this.points.length > 0) {
+        twkb.writeVarInt(this.points.length);
+
+        var previousPoint = new Point(0, 0, 0, 0);
+        for (var i = 0; i < this.points.length; i++)
+            this.points[i]._writeTwkbPoint(twkb, precision, previousPoint);
+    }
+
+    return twkb.buffer;
+};
+
+MultiPoint.prototype._getWkbSize = function () {
+    var coordinateSize = 16;
+
+    if (this.hasZ)
+        coordinateSize += 8;
+    if (this.hasM)
+        coordinateSize += 8;
+
+    coordinateSize += 5;
+
+    return 1 + 4 + 4 + (this.points.length * coordinateSize);
+};
+
+MultiPoint.prototype.toGeoJSON = function (options) {
+    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
+    geoJSON.type = Types.geoJSON.MultiPoint;
+    geoJSON.coordinates = [];
+
+    for (var i = 0; i < this.points.length; i++)
+        geoJSON.coordinates.push(this.points[i].toGeoJSON().coordinates);
+
+    return geoJSON;
+};
+
+},{"./binarywriter":145,"./geometry":146,"./point":152,"./types":154,"util":141}],151:[function(require,module,exports){
+module.exports = MultiPolygon;
+
+var util = require('util');
+
+var Types = require('./types');
+var Geometry = require('./geometry');
+var Point = require('./point');
+var Polygon = require('./polygon');
+var BinaryWriter = require('./binarywriter');
+
+function MultiPolygon(polygons, srid) {
+    Geometry.call(this);
+
+    this.polygons = polygons || [];
+	this.srid = srid;
+
+    if (this.polygons.length > 0) {
+        this.hasZ = this.polygons[0].hasZ;
+        this.hasM = this.polygons[0].hasM;
+    }
+}
+
+util.inherits(MultiPolygon, Geometry);
+
+MultiPolygon.Z = function (polygons, srid) {
+    var multiPolygon = new MultiPolygon(polygons, srid);
+    multiPolygon.hasZ = true;
+    return multiPolygon;
+};
+
+MultiPolygon.M = function (polygons, srid) {
+    var multiPolygon = new MultiPolygon(polygons, srid);
+    multiPolygon.hasM = true;
+    return multiPolygon;
+};
+
+MultiPolygon.ZM = function (polygons, srid) {
+    var multiPolygon = new MultiPolygon(polygons, srid);
+    multiPolygon.hasZ = true;
+    multiPolygon.hasM = true;
+    return multiPolygon;
+};
+
+MultiPolygon._parseWkt = function (value, options) {
+    var multiPolygon = new MultiPolygon();
+    multiPolygon.srid = options.srid;
+    multiPolygon.hasZ = options.hasZ;
+    multiPolygon.hasM = options.hasM;
+
+    if (value.isMatch(['EMPTY']))
+        return multiPolygon;
+
+    value.expectGroupStart();
+
+    do {
+        value.expectGroupStart();
+
+        var exteriorRing = [];
+        var interiorRings = [];
+
+        value.expectGroupStart();
+        exteriorRing.push.apply(exteriorRing, value.matchCoordinates(options));
+        value.expectGroupEnd();
+
+        while (value.isMatch([','])) {
+            value.expectGroupStart();
+            interiorRings.push(value.matchCoordinates(options));
+            value.expectGroupEnd();
+        }
+
+        multiPolygon.polygons.push(new Polygon(exteriorRing, interiorRings));
+
+        value.expectGroupEnd();
+
+    } while (value.isMatch([',']));
+
+    value.expectGroupEnd();
+
+    return multiPolygon;
+};
+
+MultiPolygon._parseWkb = function (value, options) {
+    var multiPolygon = new MultiPolygon();
+    multiPolygon.srid = options.srid;
+    multiPolygon.hasZ = options.hasZ;
+    multiPolygon.hasM = options.hasM;
+
+    var polygonCount = value.readUInt32();
+
+    for (var i = 0; i < polygonCount; i++)
+        multiPolygon.polygons.push(Geometry.parse(value, options));
+
+    return multiPolygon;
+};
+
+MultiPolygon._parseTwkb = function (value, options) {
+    var multiPolygon = new MultiPolygon();
+    multiPolygon.hasZ = options.hasZ;
+    multiPolygon.hasM = options.hasM;
+
+    if (options.isEmpty)
+        return multiPolygon;
+
+    var previousPoint = new Point(0, 0, options.hasZ ? 0 : undefined, options.hasM ? 0 : undefined);
+    var polygonCount = value.readVarInt();
+
+    for (var i = 0; i < polygonCount; i++) {
+        var polygon = new Polygon();
+        polygon.hasZ = options.hasZ;
+        polygon.hasM = options.hasM;
+
+        var ringCount = value.readVarInt();
+        var exteriorRingCount = value.readVarInt();
+
+        for (var j = 0; j < exteriorRingCount; j++)
+            polygon.exteriorRing.push(Point._readTwkbPoint(value, options, previousPoint));
+
+        for (j = 1; j < ringCount; j++) {
+            var interiorRing = [];
+
+            var interiorRingCount = value.readVarInt();
+
+            for (var k = 0; k < interiorRingCount; k++)
+                interiorRing.push(Point._readTwkbPoint(value, options, previousPoint));
+
+            polygon.interiorRings.push(interiorRing);
+        }
+
+        multiPolygon.polygons.push(polygon);
+    }
+
+    return multiPolygon;
+};
+
+MultiPolygon._parseGeoJSON = function (value) {
+    var multiPolygon = new MultiPolygon();
+
+    if (value.coordinates.length > 0 && value.coordinates[0].length > 0 && value.coordinates[0][0].length > 0)
+        multiPolygon.hasZ = value.coordinates[0][0][0].length > 2;
+
+    for (var i = 0; i < value.coordinates.length; i++)
+        multiPolygon.polygons.push(Polygon._parseGeoJSON({ coordinates: value.coordinates[i] }));
+
+    return multiPolygon;
+};
+
+MultiPolygon.prototype.toWkt = function () {
+    if (this.polygons.length === 0)
+        return this._getWktType(Types.wkt.MultiPolygon, true);
+
+    var wkt = this._getWktType(Types.wkt.MultiPolygon, false) + '(';
+
+    for (var i = 0; i < this.polygons.length; i++)
+        wkt += this.polygons[i]._toInnerWkt() + ',';
+
+    wkt = wkt.slice(0, -1);
+    wkt += ')';
+
+    return wkt;
+};
+
+MultiPolygon.prototype.toWkb = function () {
+    var wkb = new BinaryWriter(this._getWkbSize());
+
+    wkb.writeInt8(1);
+
+    this._writeWkbType(wkb, Types.wkb.MultiPolygon);
+    wkb.writeUInt32LE(this.polygons.length);
+
+    for (var i = 0; i < this.polygons.length; i++)
+        wkb.writeBuffer(this.polygons[i].toWkb({ srid: this.srid }));
+
+    return wkb.buffer;
+};
+
+MultiPolygon.prototype.toTwkb = function () {
+    var twkb = new BinaryWriter(0, true);
+
+    var precision = Geometry.getTwkbPrecision(5, 0, 0);
+    var isEmpty = this.polygons.length === 0;
+
+    this._writeTwkbHeader(twkb, Types.wkb.MultiPolygon, precision, isEmpty);
+
+    if (this.polygons.length > 0) {
+        twkb.writeVarInt(this.polygons.length);
+
+        var previousPoint = new Point(0, 0, 0, 0);
+        for (var i = 0; i < this.polygons.length; i++) {
+            twkb.writeVarInt(1 + this.polygons[i].interiorRings.length);
+
+            twkb.writeVarInt(this.polygons[i].exteriorRing.length);
+
+            for (var j = 0; j < this.polygons[i].exteriorRing.length; j++)
+                this.polygons[i].exteriorRing[j]._writeTwkbPoint(twkb, precision, previousPoint);
+
+            for (j = 0; j < this.polygons[i].interiorRings.length; j++) {
+                twkb.writeVarInt(this.polygons[i].interiorRings[j].length);
+
+                for (var k = 0; k < this.polygons[i].interiorRings[j].length; k++)
+                    this.polygons[i].interiorRings[j][k]._writeTwkbPoint(twkb, precision, previousPoint);
+            }
+        }
+    }
+
+    return twkb.buffer;
+};
+
+MultiPolygon.prototype._getWkbSize = function () {
+    var size = 1 + 4 + 4;
+
+    for (var i = 0; i < this.polygons.length; i++)
+        size += this.polygons[i]._getWkbSize();
+
+    return size;
+};
+
+MultiPolygon.prototype.toGeoJSON = function (options) {
+    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
+    geoJSON.type = Types.geoJSON.MultiPolygon;
+    geoJSON.coordinates = [];
+
+    for (var i = 0; i < this.polygons.length; i++)
+        geoJSON.coordinates.push(this.polygons[i].toGeoJSON().coordinates);
+
+    return geoJSON;
+};
+
+},{"./binarywriter":145,"./geometry":146,"./point":152,"./polygon":153,"./types":154,"util":141}],152:[function(require,module,exports){
+module.exports = Point;
+
+var util = require('util');
+
+var Geometry = require('./geometry');
+var Types = require('./types');
+var BinaryWriter = require('./binarywriter');
+var ZigZag = require('./zigzag.js');
+
+function Point(x, y, z, m, srid) {
+    Geometry.call(this);
+
+    this.x = x;
+    this.y = y;
+    this.z = z;
+    this.m = m;
+	this.srid = srid;
+
+    this.hasZ = typeof this.z !== 'undefined';
+    this.hasM = typeof this.m !== 'undefined';
+}
+
+util.inherits(Point, Geometry);
+
+Point.Z = function (x, y, z, srid) {
+    var point = new Point(x, y, z, undefined, srid);
+    point.hasZ = true;
+    return point;
+};
+
+Point.M = function (x, y, m, srid) {
+    var point = new Point(x, y, undefined, m, srid);
+    point.hasM = true;
+    return point;
+};
+
+Point.ZM = function (x, y, z, m, srid) {
+    var point = new Point(x, y, z, m, srid);
+    point.hasZ = true;
+    point.hasM = true;
+    return point;
+};
+
+Point._parseWkt = function (value, options) {
+    var point = new Point();
+    point.srid = options.srid;
+    point.hasZ = options.hasZ;
+    point.hasM = options.hasM;
+
+    if (value.isMatch(['EMPTY']))
+        return point;
+
+    value.expectGroupStart();
+
+    var coordinate = value.matchCoordinate(options);
+
+    point.x = coordinate.x;
+    point.y = coordinate.y;
+    point.z = coordinate.z;
+    point.m = coordinate.m;
+
+    value.expectGroupEnd();
+
+    return point;
+};
+
+Point._parseWkb = function (value, options) {
+    var point = Point._readWkbPoint(value, options);
+    point.srid = options.srid;
+    return point;
+};
+
+Point._readWkbPoint = function (value, options) {
+    return new Point(value.readDouble(), value.readDouble(),
+        options.hasZ ? value.readDouble() : undefined,
+        options.hasM ? value.readDouble() : undefined);
+};
+
+Point._parseTwkb = function (value, options) {
+    var point = new Point();
+    point.hasZ = options.hasZ;
+    point.hasM = options.hasM;
+
+    if (options.isEmpty)
+        return point;
+
+    point.x = ZigZag.decode(value.readVarInt()) / options.precisionFactor;
+    point.y = ZigZag.decode(value.readVarInt()) / options.precisionFactor;
+    point.z = options.hasZ ? ZigZag.decode(value.readVarInt()) / options.zPrecisionFactor : undefined;
+    point.m = options.hasM ? ZigZag.decode(value.readVarInt()) / options.mPrecisionFactor : undefined;
+
+    return point;
+};
+
+Point._readTwkbPoint = function (value, options, previousPoint) {
+    previousPoint.x += ZigZag.decode(value.readVarInt()) / options.precisionFactor;
+    previousPoint.y += ZigZag.decode(value.readVarInt()) / options.precisionFactor;
+
+    if (options.hasZ)
+        previousPoint.z += ZigZag.decode(value.readVarInt()) / options.zPrecisionFactor;
+    if (options.hasM)
+        previousPoint.m += ZigZag.decode(value.readVarInt()) / options.mPrecisionFactor;
+
+    return new Point(previousPoint.x, previousPoint.y, previousPoint.z, previousPoint.m);
+};
+
+Point._parseGeoJSON = function (value) {
+    return Point._readGeoJSONPoint(value.coordinates);
+};
+
+Point._readGeoJSONPoint = function (coordinates) {
+    if (coordinates.length === 0)
+        return new Point();
+
+    if (coordinates.length > 2)
+        return new Point(coordinates[0], coordinates[1], coordinates[2]);
+
+    return new Point(coordinates[0], coordinates[1]);
+};
+
+Point.prototype.toWkt = function () {
+    if (typeof this.x === 'undefined' && typeof this.y === 'undefined' &&
+        typeof this.z === 'undefined' && typeof this.m === 'undefined')
+        return this._getWktType(Types.wkt.Point, true);
+
+    return this._getWktType(Types.wkt.Point, false) + '(' + this._getWktCoordinate(this) + ')';
+};
+
+Point.prototype.toWkb = function (parentOptions) {
+    var wkb = new BinaryWriter(this._getWkbSize());
+
+    wkb.writeInt8(1);
+    this._writeWkbType(wkb, Types.wkb.Point, parentOptions);
+
+    if (typeof this.x === 'undefined' && typeof this.y === 'undefined') {
+        wkb.writeDoubleLE(NaN);
+        wkb.writeDoubleLE(NaN);
+
+        if (this.hasZ)
+            wkb.writeDoubleLE(NaN);
+        if (this.hasM)
+            wkb.writeDoubleLE(NaN);
+    }
+    else {
+        this._writeWkbPoint(wkb);
+    }
+
+    return wkb.buffer;
+};
+
+Point.prototype._writeWkbPoint = function (wkb) {
+    wkb.writeDoubleLE(this.x);
+    wkb.writeDoubleLE(this.y);
+
+    if (this.hasZ)
+        wkb.writeDoubleLE(this.z);
+    if (this.hasM)
+        wkb.writeDoubleLE(this.m);
+};
+
+Point.prototype.toTwkb = function () {
+    var twkb = new BinaryWriter(0, true);
+
+    var precision = Geometry.getTwkbPrecision(5, 0, 0);
+    var isEmpty = typeof this.x === 'undefined' && typeof this.y === 'undefined';
+
+    this._writeTwkbHeader(twkb, Types.wkb.Point, precision, isEmpty);
+
+    if (!isEmpty)
+        this._writeTwkbPoint(twkb, precision, new Point(0, 0, 0, 0));
+
+    return twkb.buffer;
+};
+
+Point.prototype._writeTwkbPoint = function (twkb, precision, previousPoint) {
+    var x = this.x * precision.xyFactor;
+    var y = this.y * precision.xyFactor;
+    var z = this.z * precision.zFactor;
+    var m = this.m * precision.mFactor;
+
+    twkb.writeVarInt(ZigZag.encode(x - previousPoint.x));
+    twkb.writeVarInt(ZigZag.encode(y - previousPoint.y));
+    if (this.hasZ)
+        twkb.writeVarInt(ZigZag.encode(z - previousPoint.z));
+    if (this.hasM)
+        twkb.writeVarInt(ZigZag.encode(m - previousPoint.m));
+
+    previousPoint.x = x;
+    previousPoint.y = y;
+    previousPoint.z = z;
+    previousPoint.m = m;
+};
+
+Point.prototype._getWkbSize = function () {
+    var size = 1 + 4 + 8 + 8;
+
+    if (this.hasZ)
+        size += 8;
+    if (this.hasM)
+        size += 8;
+
+    return size;
+};
+
+Point.prototype.toGeoJSON = function (options) {
+    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
+    geoJSON.type = Types.geoJSON.Point;
+
+    if (typeof this.x === 'undefined' && typeof this.y === 'undefined')
+        geoJSON.coordinates = [];
+    else if (typeof this.z !== 'undefined')
+        geoJSON.coordinates = [this.x, this.y, this.z];
+    else
+        geoJSON.coordinates = [this.x, this.y];
+
+    return geoJSON;
+};
+
+},{"./binarywriter":145,"./geometry":146,"./types":154,"./zigzag.js":157,"util":141}],153:[function(require,module,exports){
+module.exports = Polygon;
+
+var util = require('util');
+
+var Geometry = require('./geometry');
+var Types = require('./types');
+var Point = require('./point');
+var BinaryWriter = require('./binarywriter');
+
+function Polygon(exteriorRing, interiorRings, srid) {
+    Geometry.call(this);
+
+    this.exteriorRing = exteriorRing || [];
+    this.interiorRings = interiorRings || [];
+	this.srid = srid;
+
+    if (this.exteriorRing.length > 0) {
+        this.hasZ = this.exteriorRing[0].hasZ;
+        this.hasM = this.exteriorRing[0].hasM;
+    }
+}
+
+util.inherits(Polygon, Geometry);
+
+Polygon.Z = function (exteriorRing, interiorRings, srid) {
+    var polygon = new Polygon(exteriorRing, interiorRings, srid);
+    polygon.hasZ = true;
+    return polygon;
+};
+
+Polygon.M = function (exteriorRing, interiorRings, srid) {
+    var polygon = new Polygon(exteriorRing, interiorRings, srid);
+    polygon.hasM = true;
+    return polygon;
+};
+
+Polygon.ZM = function (exteriorRing, interiorRings, srid) {
+    var polygon = new Polygon(exteriorRing, interiorRings, srid);
+    polygon.hasZ = true;
+    polygon.hasM = true;
+    return polygon;
+};
+
+Polygon._parseWkt = function (value, options) {
+    var polygon = new Polygon();
+    polygon.srid = options.srid;
+    polygon.hasZ = options.hasZ;
+    polygon.hasM = options.hasM;
+
+    if (value.isMatch(['EMPTY']))
+        return polygon;
+
+    value.expectGroupStart();
+
+    value.expectGroupStart();
+    polygon.exteriorRing.push.apply(polygon.exteriorRing, value.matchCoordinates(options));
+    value.expectGroupEnd();
+
+    while (value.isMatch([','])) {
+        value.expectGroupStart();
+        polygon.interiorRings.push(value.matchCoordinates(options));
+        value.expectGroupEnd();
+    }
+
+    value.expectGroupEnd();
+
+    return polygon;
+};
+
+Polygon._parseWkb = function (value, options) {
+    var polygon = new Polygon();
+    polygon.srid = options.srid;
+    polygon.hasZ = options.hasZ;
+    polygon.hasM = options.hasM;
+
+    var ringCount = value.readUInt32();
+
+    if (ringCount > 0) {
+        var exteriorRingCount = value.readUInt32();
+
+        for (var i = 0; i < exteriorRingCount; i++)
+            polygon.exteriorRing.push(Point._readWkbPoint(value, options));
+
+        for (i = 1; i < ringCount; i++) {
+            var interiorRing = [];
+
+            var interiorRingCount = value.readUInt32();
+
+            for (var j = 0; j < interiorRingCount; j++)
+                interiorRing.push(Point._readWkbPoint(value, options));
+
+            polygon.interiorRings.push(interiorRing);
+        }
+    }
+
+    return polygon;
+};
+
+Polygon._parseTwkb = function (value, options) {
+    var polygon = new Polygon();
+    polygon.hasZ = options.hasZ;
+    polygon.hasM = options.hasM;
+
+    if (options.isEmpty)
+        return polygon;
+
+    var previousPoint = new Point(0, 0, options.hasZ ? 0 : undefined, options.hasM ? 0 : undefined);
+    var ringCount = value.readVarInt();
+    var exteriorRingCount = value.readVarInt();
+
+    for (var i = 0; i < exteriorRingCount; i++)
+        polygon.exteriorRing.push(Point._readTwkbPoint(value, options, previousPoint));
+
+    for (i = 1; i < ringCount; i++) {
+        var interiorRing = [];
+
+        var interiorRingCount = value.readVarInt();
+
+        for (var j = 0; j < interiorRingCount; j++)
+            interiorRing.push(Point._readTwkbPoint(value, options, previousPoint));
+
+        polygon.interiorRings.push(interiorRing);
+    }
+
+    return polygon;
+};
+
+Polygon._parseGeoJSON = function (value) {
+    var polygon = new Polygon();
+
+    if (value.coordinates.length > 0 && value.coordinates[0].length > 0)
+        polygon.hasZ = value.coordinates[0][0].length > 2;
+
+    for (var i = 0; i < value.coordinates.length; i++) {
+        if (i > 0)
+            polygon.interiorRings.push([]);
+
+        for (var j = 0; j  < value.coordinates[i].length; j++) {
+            if (i === 0)
+                polygon.exteriorRing.push(Point._readGeoJSONPoint(value.coordinates[i][j]));
+            else
+                polygon.interiorRings[i - 1].push(Point._readGeoJSONPoint(value.coordinates[i][j]));
+        }
+    }
+
+    return polygon;
+};
+
+Polygon.prototype.toWkt = function () {
+    if (this.exteriorRing.length === 0)
+        return this._getWktType(Types.wkt.Polygon, true);
+
+    return this._getWktType(Types.wkt.Polygon, false) + this._toInnerWkt();
+};
+
+Polygon.prototype._toInnerWkt = function () {
+    var innerWkt = '((';
+
+    for (var i = 0; i < this.exteriorRing.length; i++)
+        innerWkt += this._getWktCoordinate(this.exteriorRing[i]) + ',';
+
+    innerWkt = innerWkt.slice(0, -1);
+    innerWkt += ')';
+
+    for (i = 0; i < this.interiorRings.length; i++) {
+        innerWkt += ',(';
+
+        for (var j = 0; j < this.interiorRings[i].length; j++) {
+            innerWkt += this._getWktCoordinate(this.interiorRings[i][j]) + ',';
+        }
+
+        innerWkt = innerWkt.slice(0, -1);
+        innerWkt += ')';
+    }
+
+    innerWkt += ')';
+
+    return innerWkt;
+};
+
+Polygon.prototype.toWkb = function (parentOptions) {
+    var wkb = new BinaryWriter(this._getWkbSize());
+
+    wkb.writeInt8(1);
+
+    this._writeWkbType(wkb, Types.wkb.Polygon, parentOptions);
+
+    if (this.exteriorRing.length > 0) {
+        wkb.writeUInt32LE(1 + this.interiorRings.length);
+        wkb.writeUInt32LE(this.exteriorRing.length);
+    }
+    else {
+        wkb.writeUInt32LE(0);
+    }
+
+    for (var i = 0; i < this.exteriorRing.length; i++)
+        this.exteriorRing[i]._writeWkbPoint(wkb);
+
+    for (i = 0; i < this.interiorRings.length; i++) {
+        wkb.writeUInt32LE(this.interiorRings[i].length);
+
+        for (var j = 0; j < this.interiorRings[i].length; j++)
+            this.interiorRings[i][j]._writeWkbPoint(wkb);
+    }
+
+    return wkb.buffer;
+};
+
+Polygon.prototype.toTwkb = function () {
+    var twkb = new BinaryWriter(0, true);
+
+    var precision = Geometry.getTwkbPrecision(5, 0, 0);
+    var isEmpty = this.exteriorRing.length === 0;
+
+    this._writeTwkbHeader(twkb, Types.wkb.Polygon, precision, isEmpty);
+
+    if (this.exteriorRing.length > 0) {
+        twkb.writeVarInt(1 + this.interiorRings.length);
+
+        twkb.writeVarInt(this.exteriorRing.length);
+
+        var previousPoint = new Point(0, 0, 0, 0);
+        for (var i = 0; i < this.exteriorRing.length; i++)
+            this.exteriorRing[i]._writeTwkbPoint(twkb, precision, previousPoint);
+
+        for (i = 0; i < this.interiorRings.length; i++) {
+            twkb.writeVarInt(this.interiorRings[i].length);
+
+            for (var j = 0; j < this.interiorRings[i].length; j++)
+                this.interiorRings[i][j]._writeTwkbPoint(twkb, precision, previousPoint);
+        }
+    }
+
+    return twkb.buffer;
+};
+
+Polygon.prototype._getWkbSize = function () {
+    var coordinateSize = 16;
+
+    if (this.hasZ)
+        coordinateSize += 8;
+    if (this.hasM)
+        coordinateSize += 8;
+
+    var size = 1 + 4 + 4;
+
+    if (this.exteriorRing.length > 0)
+        size += 4 + (this.exteriorRing.length * coordinateSize);
+
+    for (var i = 0; i < this.interiorRings.length; i++)
+        size += 4 + (this.interiorRings[i].length * coordinateSize);
+
+    return size;
+};
+
+Polygon.prototype.toGeoJSON = function (options) {
+    var geoJSON = Geometry.prototype.toGeoJSON.call(this, options);
+    geoJSON.type = Types.geoJSON.Polygon;
+    geoJSON.coordinates = [];
+
+    if (this.exteriorRing.length > 0) {
+        var exteriorRing = [];
+
+        for (var i = 0; i < this.exteriorRing.length; i++) {
+            if (this.hasZ)
+                exteriorRing.push([this.exteriorRing[i].x, this.exteriorRing[i].y, this.exteriorRing[i].z]);
+            else
+                exteriorRing.push([this.exteriorRing[i].x, this.exteriorRing[i].y]);
+        }
+
+        geoJSON.coordinates.push(exteriorRing);
+    }
+
+    for (var j = 0; j < this.interiorRings.length; j++) {
+        var interiorRing = [];
+
+        for (var k = 0; k < this.interiorRings[j].length; k++) {
+            if (this.hasZ)
+                interiorRing.push([this.interiorRings[j][k].x, this.interiorRings[j][k].y, this.interiorRings[j][k].z]);
+            else
+                interiorRing.push([this.interiorRings[j][k].x, this.interiorRings[j][k].y]);
+        }
+
+        geoJSON.coordinates.push(interiorRing);
+    }
+
+    return geoJSON;
+};
+
+},{"./binarywriter":145,"./geometry":146,"./point":152,"./types":154,"util":141}],154:[function(require,module,exports){
+module.exports = {
+    wkt: {
+        Point: 'POINT',
+        LineString: 'LINESTRING',
+        Polygon: 'POLYGON',
+        MultiPoint: 'MULTIPOINT',
+        MultiLineString: 'MULTILINESTRING',
+        MultiPolygon: 'MULTIPOLYGON',
+        GeometryCollection: 'GEOMETRYCOLLECTION'
+    },
+    wkb: {
+        Point: 1,
+        LineString: 2,
+        Polygon: 3,
+        MultiPoint: 4,
+        MultiLineString: 5,
+        MultiPolygon: 6,
+        GeometryCollection: 7
+    },
+    geoJSON: {
+        Point: 'Point',
+        LineString: 'LineString',
+        Polygon: 'Polygon',
+        MultiPoint: 'MultiPoint',
+        MultiLineString: 'MultiLineString',
+        MultiPolygon: 'MultiPolygon',
+        GeometryCollection: 'GeometryCollection'
+    }
+};
+
+},{}],155:[function(require,module,exports){
+module.exports = WktParser;
+
+var Types = require('./types');
+var Point = require('./point');
+
+function WktParser(value) {
+    this.value = value;
+    this.position = 0;
+}
+
+WktParser.prototype.match = function (tokens) {
+    this.skipWhitespaces();
+
+    for (var i = 0; i < tokens.length; i++) {
+        if (this.value.substring(this.position).indexOf(tokens[i]) === 0) {
+            this.position += tokens[i].length;
+            return tokens[i];
+        }
+    }
+
+    return null;
+};
+
+WktParser.prototype.matchRegex = function (tokens) {
+    this.skipWhitespaces();
+
+    for (var i = 0; i < tokens.length; i++) {
+        var match = this.value.substring(this.position).match(tokens[i]);
+
+        if (match) {
+            this.position += match[0].length;
+            return match;
+        }
+    }
+
+    return null;
+};
+
+WktParser.prototype.isMatch = function (tokens) {
+    this.skipWhitespaces();
+
+    for (var i = 0; i < tokens.length; i++) {
+        if (this.value.substring(this.position).indexOf(tokens[i]) === 0) {
+            this.position += tokens[i].length;
+            return true;
+        }
+    }
+
+    return false;
+};
+
+WktParser.prototype.matchType = function () {
+    var geometryType = this.match([Types.wkt.Point, Types.wkt.LineString, Types.wkt.Polygon, Types.wkt.MultiPoint,
+    Types.wkt.MultiLineString, Types.wkt.MultiPolygon, Types.wkt.GeometryCollection]);
+
+    if (!geometryType)
+        throw new Error('Expected geometry type');
+
+    return geometryType;
+};
+
+WktParser.prototype.matchDimension = function () {
+    var dimension = this.match(['ZM', 'Z', 'M']);
+
+    switch (dimension) {
+        case 'ZM': return { hasZ: true, hasM: true };
+        case 'Z': return { hasZ: true, hasM: false };
+        case 'M': return { hasZ: false, hasM: true };
+        default: return { hasZ: false, hasM: false };
+    }
+};
+
+WktParser.prototype.expectGroupStart = function () {
+    if (!this.isMatch(['(']))
+        throw new Error('Expected group start');
+};
+
+WktParser.prototype.expectGroupEnd = function () {
+    if (!this.isMatch([')']))
+        throw new Error('Expected group end');
+};
+
+WktParser.prototype.matchCoordinate = function (options) {
+    var match;
+
+    if (options.hasZ && options.hasM)
+        match = this.matchRegex([/^(\S*)\s+(\S*)\s+(\S*)\s+([^\s,)]*)/]);
+    else if (options.hasZ || options.hasM)
+        match = this.matchRegex([/^(\S*)\s+(\S*)\s+([^\s,)]*)/]);
+    else
+        match = this.matchRegex([/^(\S*)\s+([^\s,)]*)/]);
+
+    if (!match)
+        throw new Error('Expected coordinates');
+
+    if (options.hasZ && options.hasM)
+        return new Point(parseFloat(match[1]), parseFloat(match[2]), parseFloat(match[3]), parseFloat(match[4]));
+    else if (options.hasZ)
+        return new Point(parseFloat(match[1]), parseFloat(match[2]), parseFloat(match[3]));
+    else if (options.hasM)
+        return new Point(parseFloat(match[1]), parseFloat(match[2]), undefined, parseFloat(match[3]));
+    else
+        return new Point(parseFloat(match[1]), parseFloat(match[2]));
+};
+
+WktParser.prototype.matchCoordinates = function (options) {
+    var coordinates = [];
+
+    do {
+        var startsWithBracket = this.isMatch(['(']);
+
+        coordinates.push(this.matchCoordinate(options));
+
+        if (startsWithBracket)
+            this.expectGroupEnd();
+    } while (this.isMatch([',']));
+
+    return coordinates;
+};
+
+WktParser.prototype.skipWhitespaces = function () {
+    while (this.position < this.value.length && this.value[this.position] === ' ')
+        this.position++;
+};
+
+},{"./point":152,"./types":154}],156:[function(require,module,exports){
+exports.Types = require('./types');
+exports.Geometry = require('./geometry');
+exports.Point = require('./point');
+exports.LineString = require('./linestring');
+exports.Polygon = require('./polygon');
+exports.MultiPoint = require('./multipoint');
+exports.MultiLineString = require('./multilinestring');
+exports.MultiPolygon = require('./multipolygon');
+exports.GeometryCollection = require('./geometrycollection');
+},{"./geometry":146,"./geometrycollection":147,"./linestring":148,"./multilinestring":149,"./multipoint":150,"./multipolygon":151,"./point":152,"./polygon":153,"./types":154}],157:[function(require,module,exports){
+module.exports = {
+    encode: function (value) {
+        return (value << 1) ^ (value >> 31);
+    },
+    decode: function (value) {
+        return (value >> 1) ^ (-(value & 1));
+    }
+};
+
+},{}],158:[function(require,module,exports){
+module.exports = extend
+
+function extend() {
+    var target = {}
+
+    for (var i = 0; i < arguments.length; i++) {
+        var source = arguments[i]
+
+        for (var key in source) {
+            if (source.hasOwnProperty(key)) {
+                target[key] = source[key]
+            }
+        }
+    }
+
+    return target
+}
+
+},{}],159:[function(require,module,exports){
+module.exports = function(hostname) {
+    // Settings for geojson.io
+    L.mapbox.accessToken = 'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXFhYTA2bTMyeW44ZG0ybXBkMHkifQ.gUGbDOPUN1v1fTs5SeOR4A';
+    if (hostname === 'geojson.io') {
+        L.mapbox.config.FORCE_HTTPS = true;
+        return {
+            client_id: '62c753fd0faf18392d85',
+            gatekeeper_url: 'https://geojsonioauth.herokuapp.com'
+        };
+    // Customize these settings for your own development/deployment
+    // version of geojson.io.
+    } else {
+        L.mapbox.config.HTTP_URL = 'http://a.tiles.mapbox.com/v4';
+        L.mapbox.config.HTTPS_URL = 'https://a.tiles.mapbox.com/v4';
+        L.mapbox.config.FORCE_HTTPS = true;
+        L.mapbox.config.REQUIRE_ACCESS_TOKEN = true;
+        return {
+            GithubAPI: null,
+            client_id: 'bb7bbe70bd1f707125bc',
+            gatekeeper_url: 'https://localhostauth.herokuapp.com'
+        };
+    }
+};
+
+},{}],160:[function(require,module,exports){
+module.exports = api;
+
+function api(context) {
+    if (typeof console === 'undefined' || !console || !console.log) return;
+
+    console.log('%c⚛ geojson.io api ⚛', 'font-family:monospace;font-size:20px;color:darkblue;');
+    console.log('%cfrom here, you can customize geojson.io to your liking by mucking around with the internals', 'font-family:monospace;font-size:14px;color:darkblue;');
+    console.log('%chere\'s what\'s available ↓', 'color:blue;');
+    console.log('');
+
+    console.log('%c- window.api.map: the leaflet map object', 'font-weight:bold;');
+    console.log('%O', context.map);
+
+    console.log('%c- window.api.mapLayer: the leaflet mapLayer object', 'font-weight:bold;');
+    console.log('%O', context.mapLayer);
+
+    console.log('%c- window.api.drawControl: the leaflet.draw control', 'font-weight:bold;');
+    console.log('%O', context.drawControl);
+
+    console.log('');
+
+    console.log('%c- window.api.data: the data model', 'font-weight:bold;');
+    console.log('%O', context.data);
+
+    console.log('');
+    console.log('%cExample:', 'font-weight:bold;');
+    console.log('');
+    console.log('%c  window.api.map.setView([38, -78], 5);', 'color:green;');
+
+    console.log('');
+    console.log('%c  window.api.data.mergeFeatures([{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [0, 0] } }]);', 'color:green;');
+
+    window.api = {
+        map: context.map,
+        mapLayer: context.mapLayer,
+        drawControl: context.drawControl,
+        data: context.data
+    };
+
+    d3.rebind(window.api, context.dispatch, 'on');
+}
+
+},{}],161:[function(require,module,exports){
+var clone = require('clone'),
+    xtend = require('xtend'),
+    config = require('../config.js')(location.hostname),
+    source = {
+        gist: require('../source/gist'),
+        github: require('../source/github'),
+        local: require('../source/local')
+    };
+
+function _getData() {
+    return {
+        map: {
+            type: 'FeatureCollection',
+            features: []
+        },
+        dirty: false,
+        source: null,
+        meta: null,
+        type: 'local'
+    };
+}
+
+module.exports = function(context) {
+
+    var _data = _getData();
+
+    function mapFile(gist) {
+        var f;
+        var content;
+
+        for (f in gist.files) {
+            content = gist.files[f].content;
+            if (f.indexOf('.geojson') !== -1 && content) {
+                return f;
+            }
+        }
+
+        for (f in gist.files) {
+            content = gist.files[f].content;
+            if (f.indexOf('.json') !== -1 && content) {
+                return f;
+            }
+        }
+    }
+
+    var data = {};
+
+    data.hasFeatures = function() {
+        return !!(_data.map && _data.map.features && _data.map.features.length);
+    };
+
+    data.set = function(obj, src) {
+        for (var k in obj) {
+            _data[k] = (typeof obj[k] === 'object') ? clone(obj[k], false) : obj[k];
+        }
+        if (obj.dirty !== false) data.dirty = true;
+        context.dispatch.change({
+            obj: obj,
+            source: src
+        });
+        return data;
+    };
+
+    data.clear = function() {
+        data.set(_getData());
+    };
+
+    data.mergeFeatures = function(features, src) {
+        function coerceNum(feature) {
+            var props = feature.properties,
+                keys = Object.keys(props),
+                length = keys.length;
+
+            for (var i = 0; i < length; i++) {
+                var key = keys[i];
+                var value = props[key];
+                feature.properties[key] = losslessNumber(value);
+            }
+
+            return feature;
+        }
+
+        function losslessNumber(x) {
+            var fl = parseFloat(x);
+            if (fl.toString() === x) return fl;
+            else return x;
+        }
+
+        _data.map.features = (_data.map.features || []).concat(features.map(coerceNum));
+        return data.set({ map: _data.map }, src);
+    };
+
+    data.get = function(k) {
+        return _data[k];
+    };
+
+    data.all = function() {
+        return clone(_data, false);
+    };
+
+    data.fetch = function(q, cb) {
+        var type = q.id.split(':')[0];
+
+        switch(type) {
+            case 'gist':
+                var id = q.id.split(':')[1].split('/')[1];
+
+                // From: https://api.github.com/gists/dfa850f66f61ddc58bbf
+                // Gists > 1 MB will have truncated set to true. Request
+                // the raw URL in those cases.
+                source.gist.load(id, context, function(err, d) {
+                    if (err) return cb(err, d);
+
+                    var file = mapFile(d);
+                    // Test for .json or .geojson found
+                    if (typeof file === 'undefined') return cb(err, d);
+
+                    var f = d.files[file];
+                    if (f.truncated === true) {
+                        source.gist.loadRaw(f.raw_url, context, function(err, content) {
+                            if (err) return cb(err);
+                            return cb(err, xtend(d, { file: f.filename, content: JSON.parse(content) }));
+                        });
+                    } else {
+                        return cb(err, xtend(d, { file: f.filename, content: JSON.parse(f.content) }));
+                    }
+                });
+
+                break;
+            case 'github':
+                var url = q.id.split('/');
+                var parts = {
+                    user: url[0].split(':')[1],
+                    repo: url[1],
+                    branch: url[3],
+                    path: (url.slice(4) || []).join('/')
+                };
+
+                source.github.load(parts, context, function(err, meta) {
+                    if (err) return cb(err);
+                    return source.github.loadRaw(parts, meta.sha, context, function(err, file) {
+                        try {
+                            return cb(err, xtend(meta, { content: JSON.parse(file) }));
+                        } catch(e) {
+                            // this was not a github file
+                            location.hash = '';
+                            return cb(e);
+                        }
+                    });
+                });
+
+                break;
+        }
+    };
+
+    data.parse = function(d, browser) {
+        var endpoint = config.GithubAPI || 'https://github.com/';
+        var login,
+            repo,
+            branch,
+            path,
+            chunked,
+            file;
+
+        if (d.files) d.type = 'gist';
+        var type = d.length ? d[d.length - 1].type : d.type;
+        if (d.commit) type = 'commit';
+        switch (type) {
+            case 'commit':
+                data.set({
+                    source: d.content
+                });
+                break;
+            case 'local':
+                data.set({
+                    type: 'local',
+                    map: d.content,
+                    path: d.path
+                });
+                break;
+            case 'blob':
+                login = d[0].login;
+                repo = d[1].name;
+                branch = d[2].name;
+                path = d.slice(3).map(function(p) {
+                    return p.path;
+                }).join('/');
+
+                data.set({
+                    type: 'github',
+                    source: d,
+                    meta: {
+                        login: login,
+                        repo: repo,
+                        branch: branch,
+                        name: d.path
+                    },
+                    path: path,
+                    route: 'github:' + [
+                        login,
+                        repo,
+                        'blob',
+                        branch,
+                        path
+                    ].join('/'),
+                    url: [
+                        endpoint,
+                        login,
+                        repo,
+                        'blob',
+                        branch,
+                        path
+                    ].join('/')
+                });
+                if (d.content) data.set({ map: d.content });
+                break;
+            case 'file':
+                chunked = d.html_url.split('/');
+                login = chunked[3];
+                repo = chunked[4];
+                branch = chunked[6];
+
+                data.set({
+                    type: 'github',
+                    source: d,
+                    meta: {
+                        login: login,
+                        repo: repo,
+                        branch: branch,
+                        name: d.name,
+                        sha: d.sha
+                    },
+                    map: d.content,
+                    path: d.path,
+                    route: 'github:' + [
+                        login,
+                        repo,
+                        'blob',
+                        branch,
+                        d.path
+                    ].join('/'),
+                    url: d.html_url
+                });
+                break;
+            case 'gist':
+                login = (d.owner && d.owner.login) || 'anonymous';
+                path = [login, d.id].join('/');
+
+                var name = mapFile(d);
+
+                try {
+                    if (d.files[name].content) data.set({ map: JSON.parse(d.files[name].content) });
+                } catch (e) {
+                    console.error(e);
+                }
+                data.set({
+                    type: 'gist',
+                    source: d,
+                    meta: {
+                        login: login,
+                        name: name
+                    },
+                    path: path,
+                    route: 'gist:' + path,
+                    url: d.html_url
+                });
+                break;
+        }
+    };
+
+    data.save = function(cb) {
+        var type = context.data.get('type');
+        if (type === 'github') {
+            source.github.save(context, cb);
+        } else if (type === 'gist') {
+            source.gist.save(context, cb);
+        } else if (type === 'local') {
+            if (context.data.path) {
+                source.local.save(context, cb);
+            } else {
+                source.gist.save(context, cb);
+            }
+        } else {
+            source.gist.save(context, cb);
+        }
+    };
+
+    return data;
+};
+
+},{"../config.js":159,"../source/gist":177,"../source/github":178,"../source/local":179,"clone":9,"xtend":158}],162:[function(require,module,exports){
+var qs = require('qs-hash'),
+    zoomextent = require('../lib/zoomextent'),
+    flash = require('../ui/flash');
+
+module.exports = function(context) {
+
+    function success(err, d) {
+        context.container.select('.map').classed('loading', false);
+
+        var message,
+            url = /(http:\/\/\S*)/g;
+
+        if (err) {
+            try {
+                message = err.message || JSON.parse(err.responseText).message
+                    .replace(url, '<a href="$&">$&</a>');
+            } catch(e) {
+                message = 'Sorry, an error occurred.';
+            }
+            return flash(context.container, message);
+        }
+
+        context.data.parse(d);
+
+        if (!qs.stringQs(location.hash.substring(1)).map || mapDefault()) {
+            zoomextent(context);
+        }
+    }
+
+    function mapDefault() {
+        return context.map.getZoom() == 2 || context.map.getCenter().equals(new L.LatLng(20, 0));
+    }
+
+    function inlineJSON(data) {
+        try {
+            context.data.set({
+                map: JSON.parse(data)
+            });
+            location.hash = '';
+            zoomextent(context);
+        } catch(e) {
+            return flash(context.container, 'Could not parse JSON');
+        }
+    }
+
+    function loadUrl(data) {
+        d3.json(data)
+            .header('Accept', 'application/vnd.geo+json')
+            .on('load', onload)
+            .on('error', onerror)
+            .get();
+
+        function onload(d) {
+            context.data.set({ map: d });
+            location.hash = '';
+            zoomextent(context);
+        }
+
+        function onerror() {
+            return flash(context.container, 'Could not load external file. External files must be served with CORS and be valid GeoJSON.');
+        }
+    }
+
+    return function(query) {
+        if (!query.id && !query.data) return;
+
+        var oldRoute = d3.event ? qs.stringQs(d3.event.oldURL.split('#')[1]).id :
+            context.data.get('route');
+
+        if (query.data) {
+            var type = query.data.match(/^(data\:[\w\-]+\/[\w\-]+\,?)/);
+            if (type) {
+                if (type[0] == 'data:application/json,') {
+                    inlineJSON(query.data.replace(type[0], ''));
+                } else if (type[0] == 'data:text/x-url,') {
+                    loadUrl(query.data.replace(type[0], ''));
+                }
+            }
+        } else if (query.id !== oldRoute) {
+            context.container.select('.map').classed('loading', true);
+            context.data.fetch(query, success);
+        }
+    };
+};
+
+},{"../lib/zoomextent":173,"../ui/flash":183,"qs-hash":89}],163:[function(require,module,exports){
+var zoomextent = require('../lib/zoomextent'),
+    qs = require('qs-hash');
+
+module.exports = function(context) {
+
+    d3.select(window).on('unload', onunload);
+    context.dispatch.on('change', onchange);
+
+    var query = qs.stringQs(location.hash.split('#')[1] || '');
+
+    if (location.hash !== '#new' && !query.id && !query.data) {
+        var rec = context.storage.get('recover');
+        if (rec && confirm('recover your map from the last time you edited?')) {
+            context.data.set(rec);
+            setTimeout(function() {
+                zoomextent(context);
+            }, 100);
+        } else {
+            context.storage.remove('recover');
+        }
+    }
+
+    function onunload() {
+        if (context.data.get('type') === 'local' && context.data.hasFeatures()) {
+            try {
+                context.storage.set('recover', context.data.all());
+            } catch(e) {
+                // QuotaStorageExceeded
+            }
+        } else {
+            context.storage.remove('recover');
+        }
+    }
+
+    function onchange() {
+        if (context.data.get('type') !== 'local') {
+            context.storage.remove('recover');
+        }
+    }
+};
+
+},{"../lib/zoomextent":173,"qs-hash":89}],164:[function(require,module,exports){
+var config = require('../config.js')(location.hostname);
+
+module.exports = function(context) {
+    var repo = {};
+
+    repo.details = function(callback) {
+        var endpoint = (config.GithubAPI) ? config.GithubAPI + '/api/v3/repos/' : 'https://api.github.com/repos/';
+        var cached = context.storage.get('github_repo_details'),
+            meta = context.data.get('meta'),
+            login = meta.login,
+            repo = meta.repo;
+
+        if (cached && cached.login === login && cached.repo === repo &&
+            cached.when > (+new Date() - 1000 * 60 * 60)) {
+            callback(null, cached.data);
+        } else {
+            context.storage.remove('github_repo_details');
+
+            d3.json(endpoint + [login, repo].join('/'))
+                .header('Authorization', 'token ' + context.storage.get('github_token'))
+                .on('load', onload)
+                .on('error', onerror)
+                .get();
+        }
+
+        function onload(repo) {
+            context.storage.set('github_repo_details', {
+                when: +new Date(),
+                data: repo
+            });
+            context.storage.set('github_repo', repo);
+            callback(null, repo);
+        }
+
+        function onerror(err) {
+            context.storage.remove('github_repo_details');
+            callback(new Error(err));
+        }
+    };
+
+    return repo;
+};
+
+},{"../config.js":159}],165:[function(require,module,exports){
+var qs = require('qs-hash'),
+    xtend = require('xtend');
+
+module.exports = function(context) {
+    var router = {};
+
+    router.on = function() {
+        d3.select(window).on('hashchange.router', route);
+        context.dispatch.on('change.route', unroute);
+        context.dispatch.route(getQuery());
+        return router;
+    };
+
+    router.off = function() {
+        d3.select(window).on('hashchange.router', null);
+        return router;
+    };
+
+    function route() {
+        var oldHash = d3.event.oldURL.split('#')[1] || '',
+            newHash = d3.event.newURL.split('#')[1] || '',
+            oldQuery = qs.stringQs(oldHash),
+            newQuery = qs.stringQs(newHash);
+
+        if (isOld(oldHash)) return upgrade(oldHash);
+        if (newQuery.id !== oldQuery.id) context.dispatch.route(newQuery);
+    }
+
+    function isOld(id) {
+        return (id.indexOf('gist') === 0 || id.indexOf('github') === 0 || !isNaN(parseInt(id, 10)));
+    }
+
+    function upgrade(id) {
+        var split;
+        if (isNaN(parseInt(id, 10))) {
+            split = id.split(':');
+            location.hash = '#id=' + (split[1].indexOf('/') === 0 ?
+                [split[0], split[1].substring(1)].join(':') : id);
+        } else {
+            location.hash = '#id=gist:/' + id;
+        }
+    }
+
+    function unroute() {
+        var query = getQuery();
+        var rev = reverseRoute();
+        if (rev.id && query.id !== rev.id) {
+            location.hash = '#' + qs.qsString(rev);
+        }
+    }
+
+    function getQuery() {
+        return qs.stringQs(window.location.hash.substring(1));
+    }
+
+    function reverseRoute() {
+        var query = getQuery();
+
+        return xtend(query, {
+            id: context.data.get('route')
+        });
+    }
+
+    return router;
+};
+
+},{"qs-hash":89,"xtend":158}],166:[function(require,module,exports){
+var config = require('../config.js')(location.hostname);
+
+module.exports = function(context) {
+    var user = {};
+
+    user.details = function(callback) {
+        if (!context.storage.get('github_token')) return callback(new Error('not logged in'));
+
+        var cached = context.storage.get('github_user_details');
+
+        if (cached && cached.when > (+new Date() - 1000 * 60 * 60)) {
+            callback(null, cached.data);
+        } else {
+            context.storage.remove('github_user_details');
+            var endpoint = config.GithubAPI ? config.GithubAPI + '/api/v3' : 'https://api.github.com';
+
+            d3.json(endpoint + '/user')
+                .header('Authorization', 'token ' + context.storage.get('github_token'))
+                .on('load', onload)
+                .on('error', onerror)
+                .get();
+        }
+
+        function onload(user) {
+            context.storage.set('github_user_details', {
+                when: +new Date(),
+                data: user
+            });
+            context.storage.set('github_user', user);
+            callback(null, user);
+        }
+
+        function onerror() {
+            user.logout();
+            context.storage.remove('github_user_details');
+            callback(new Error('not logged in'));
+        }
+    };
+
+    user.signXHR = function(xhr) {
+        return user.token() ?
+            xhr.header('Authorization', 'token ' + user.token()) : xhr;
+    };
+
+    user.authenticate = function() {
+        window.location.href = (config.GithubAPI || 'https://github.com') + '/login/oauth/authorize?client_id=' +
+            config.client_id +
+            '&scope=gist,repo';
+    };
+
+    user.token = function(callback) {
+        return context.storage.get('github_token');
+    };
+
+    user.logout = function() {
+        context.storage.remove('github_token');
+    };
+
+    user.login = function() {
+        context.storage.remove('github_token');
+    };
+
+    function killTokenUrl() {
+        if (window.location.href.indexOf('?code') !== -1) {
+            window.location.href = window.location.href.replace(/\?code=.*$/, '');
+        }
+    }
+
+    if (window.location.search && window.location.search.indexOf('?code') === 0) {
+        var code = window.location.search.replace(/\?{0,1}code=([^\#\&]+).*$/g, '$1');
+        d3.select('.map').classed('loading', true);
+        d3.json(config.gatekeeper_url + '/authenticate/' + code)
+            .on('load', function(l) {
+                d3.select('.map').classed('loading', false);
+                if (l.token) window.localStorage.github_token = l.token;
+                killTokenUrl();
+            })
+            .on('error', function() {
+                d3.select('.map').classed('loading', false);
+                alert('Authentication with GitHub failed');
+            })
+            .get();
+    }
+
+    return user;
+};
+
+},{"../config.js":159}],167:[function(require,module,exports){
+window.require = require;
+var ui = require("./ui"),
+  map = require("./ui/map"),
+  data = require("./core/data"),
+  loader = require("./core/loader"),
+  router = require("./core/router"),
+  recovery = require("./core/recovery"),
+  repo = require("./core/repo"),
+  user = require("./core/user"),
+  api = require("./core/api"),
+  store = require("store");
+
+var gjIO = geojsonIO(),
+  gjUI = ui(gjIO).write;
+
+d3.select(".geojsonio").call(gjUI);
+
+gjIO.recovery = recovery(gjIO);
+gjIO.router.on();
+
+api(gjIO);
+
+function geojsonIO() {
+  var context = {};
+  context.dispatch = d3.dispatch("change", "route");
+  context.storage = store;
+  context.map = map(context);
+  context.data = data(context);
+  context.dispatch.on("route", loader(context));
+  context.repo = repo(context);
+  context.router = router(context);
+  context.user = user(context);
+  return context;
+}
+
+},{"./core/api":160,"./core/data":161,"./core/loader":162,"./core/recovery":163,"./core/repo":164,"./core/router":165,"./core/user":166,"./ui":180,"./ui/map":185,"store":103}],168:[function(require,module,exports){
+var qs = require('qs-hash');
+require('leaflet-hash');
+
+L.Hash.prototype.parseHash = function(hash) {
+    var query = qs.stringQs(hash.substring(1));
+    var map = query.map || '';
+    var args = map.split('/');
+    if (args.length == 3) {
+        var zoom = parseInt(args[0], 10),
+            lat = parseFloat(args[1]),
+                lon = parseFloat(args[2]);
+                if (isNaN(zoom) || isNaN(lat) || isNaN(lon)) {
+                    return false;
+                } else {
+                    return {
+                        center: new L.LatLng(lat, lon),
+                        zoom: zoom
+                    };
+                }
+    } else {
+        return false;
+    }
+};
+
+L.Hash.prototype.formatHash = function(map) {
+    var query = qs.stringQs(location.hash.substring(1)),
+        center = map.getCenter(),
+            zoom = map.getZoom(),
+                precision = Math.max(0, Math.ceil(Math.log(zoom) / Math.LN2));
+
+                query.map = [zoom,
+                    center.lat.toFixed(precision),
+                    center.lng.toFixed(precision)
+                ].join('/');
+
+                return '#' + qs.qsString(query);
+};
+
+},{"leaflet-hash":63,"qs-hash":89}],169:[function(require,module,exports){
+(function (Buffer){(function (){
+var escape = require('escape-html'),
+    geojsonRandom = require('geojson-random'),
+    geojsonExtent = require('geojson-extent'),
+    geojsonFlatten = require('geojson-flatten'),
+    polyline = require('polyline'),
+    wkx = require('wkx'),
+    zoomextent = require('../lib/zoomextent');
+
+module.exports.adduserlayer = function(context, _url, _name) {
+    var url = escape(_url), name = escape(_name);
+    var layer = L.tileLayer(url, {
+        maxZoom: context.map.getMaxZoom()
+    });
+    if (context.layerControl) {
+        context.map.addLayer(layer);
+        context.layerControl.addOverlay(layer, name);
+    }
+    else {
+        context.layerControl = L.control.layers(null, {}, {
+            position: 'bottomright',
+            collapsed: false
+        }).addTo(context.map).addOverlay(layer, name);
+        context.map.addLayer(layer);
+    }
+};
+
+module.exports.zoomextent = function(context) {
+    zoomextent(context);
+};
+
+module.exports.clear = function(context) {
+    context.data.clear();
+};
+
+module.exports.random = function(context, count, type) {
+    context.data.mergeFeatures(geojsonRandom(count, type).features, 'meta');
+};
+
+module.exports.bboxify = function(context) {
+    context.data.set({ map: geojsonExtent.bboxify(context.data.get('map')) });
+};
+
+module.exports.flatten = function(context) {
+    context.data.set({ map: geojsonFlatten(context.data.get('map')) });
+};
+
+module.exports.polyline = function(context) {
+    var input = prompt('Enter your polyline');
+    try {
+        var decoded = polyline.toGeoJSON(input);
+        context.data.set({ map: decoded });
+    } catch(e) {
+        alert('Sorry, we were unable to decode that polyline');
+    }
+};
+
+module.exports.wkxBase64 = function(context) {
+    var input = prompt('Enter your Base64 encoded WKB/EWKB');
+    try {
+        var decoded = wkx.Geometry.parse(Buffer.from(input,'base64'));
+        context.data.set({ map: decoded.toGeoJSON() });
+        zoomextent(context);
+    } catch(e) {
+        console.error(e);
+        alert('Sorry, we were unable to decode that Base64 encoded WKX data');
+    }
+};
+
+module.exports.wkxHex = function(context) {
+    var input = prompt('Enter your Hex encoded WKB/EWKB');
+    try {
+        var decoded = wkx.Geometry.parse(Buffer.from(input,'hex'));
+        context.data.set({ map: decoded.toGeoJSON() });
+        zoomextent(context);
+    } catch(e) {
+        console.error(e);
+        alert('Sorry, we were unable to decode that Hex encoded WKX data');
+    }
+};
+
+module.exports.wkxString = function(context) {
+    var input = prompt('Enter your WKT/EWKT String');
+    try {
+        var decoded = wkx.Geometry.parse(input);
+        context.data.set({ map: decoded.toGeoJSON() });
+        zoomextent(context);
+    } catch(e) {
+        console.error(e);
+        alert('Sorry, we were unable to decode that WKT data');
+    }
+};
+
+}).call(this)}).call(this,require("buffer").Buffer)
+},{"../lib/zoomextent":173,"buffer":8,"escape-html":18,"geojson-extent":25,"geojson-flatten":26,"geojson-random":28,"polyline":86,"wkx":156}],170:[function(require,module,exports){
+module.exports = function(context) {
+    return function(e) {
+        var sel = d3.select(e.popup._contentNode);
+
+        sel.selectAll('.cancel')
+            .on('click', clickClose);
+
+        sel.selectAll('.save')
+            .on('click', saveFeature);
+
+        sel.selectAll('.add')
+            .on('click', addRow);
+
+        sel.selectAll('.delete-invert')
+            .on('click', removeFeature);
+
+        function clickClose() {
+            context.map.closePopup(e.popup);
+        }
+
+        function removeFeature() {
+            if (e.popup._source && context.mapLayer.hasLayer(e.popup._source)) {
+                context.mapLayer.removeLayer(e.popup._source);
+                context.data.set({map: context.mapLayer.toGeoJSON()}, 'popup');
+            }
+        }
+
+        function losslessNumber(x) {
+            var fl = parseFloat(x);
+            if (fl.toString() === x) return fl;
+            else return x;
+        }
+
+        function saveFeature() {
+            var obj = {};
+            var table = sel.select('table.marker-properties');
+            table.selectAll('tr').each(collectRow);
+            function collectRow() {
+                if (d3.select(this).selectAll('input')[0][0].value) {
+                    obj[d3.select(this).selectAll('input')[0][0].value] =
+                        losslessNumber(d3.select(this).selectAll('input')[0][1].value);
+                }
+            }
+            e.popup._source.feature.properties = obj;
+            context.data.set({map: context.mapLayer.toGeoJSON()}, 'popup');
+            context.map.closePopup(e.popup);
+        }
+
+        function addRow() {
+            var tr = sel.select('table.marker-properties tbody')
+                .append('tr');
+
+            tr.append('th')
+                .append('input')
+                .attr('type', 'text');
+
+            tr.append('td')
+                .append('input')
+                .attr('type', 'text');
+        }
+    };
+};
+
+},{}],171:[function(require,module,exports){
+var topojson = require('topojson'),
+    toGeoJSON = require('togeojson'),
+    gtfs2geojson = require('gtfs2geojson'),
+    csv2geojson = require('csv2geojson'),
+    osmtogeojson = require('osmtogeojson'),
+    polytogeojson = require('polytogeojson'),
+    geojsonNormalize = require('geojson-normalize');
+
+module.exports.readDrop = readDrop;
+module.exports.readAsText = readAsText;
+module.exports.readFile = readFile;
+
+function readDrop(callback) {
+    return function() {
+        var results = [];
+        var errors = [];
+        var warnings = [];
+        if (d3.event.dataTransfer && d3.event.dataTransfer &&
+           d3.event.dataTransfer.files && d3.event.dataTransfer.files.length) {
+            d3.event.stopPropagation();
+            d3.event.preventDefault();
+            var remaining = d3.event.dataTransfer.files.length;
+            [].forEach.call(d3.event.dataTransfer.files, function(f) {
+                readAsText(f, function(err, text) {
+                    if (err) {
+                        errors.push(err);
+                        if (!--remaining) finish(errors, results);
+                    } else {
+                        readFile(f, text, function(err, res, war) {
+                            if (err) errors.push(err);
+                            if (res) results.push(res);
+                            if (war) results.push(war);
+                            if (!--remaining) finish(errors, results, war);
+                        });
+                    }
+                });
+            });
+        } else {
+            return callback({
+                message: 'No files were dropped'
+            });
+        }
+
+        function finish(errors, results, war) {
+            // if no conversions suceeded, return the first error
+            if (!results.length && errors.length) return callback(errors[0], null, war);
+            // otherwise combine results
+            return callback(null, {
+                type: 'FeatureCollection',
+                features: results.reduce(function(memo, r) {
+                    r = geojsonNormalize(r);
+                    if (r) {
+                        memo = memo.concat(r.features);
+                    }
+                    return memo;
+                }, [])
+            }, war);
+        }
+    };
+}
+
+function readAsText(f, callback) {
+    try {
+        var reader = new FileReader();
+        reader.readAsText(f);
+        reader.onload = function(e) {
+            if (e.target && e.target.result) callback(null, e.target.result);
+            else callback({
+                message: 'Dropped file could not be loaded'
+            });
+        };
+        reader.onerror = function(e) {
+            callback({
+                message: 'Dropped file was unreadable'
+            });
+        };
+    } catch (e) {
+        callback({
+            message: 'Dropped file was unreadable'
+        });
+    }
+}
+
+function readFile(f, text, callback) {
+
+    var fileType = detectType(f, text);
+
+    if (!fileType) {
+        var filename = f.name ? f.name.toLowerCase() : '',
+            pts = filename.split('.');
+        return callback({
+            message: 'Could not detect file type'
+        });
+    } else if (fileType === 'kml') {
+        var kmldom = toDom(text);
+        if (!kmldom) {
+            return callback({
+                message: 'Invalid KML file: not valid XML'
+            });
+        }
+        var warning;
+        if (kmldom.getElementsByTagName('NetworkLink').length) {
+            warning = {
+                message: 'The KML file you uploaded included NetworkLinks: some content may not display. ' +
+                  'Please export and upload KML without NetworkLinks for optimal performance'
+            };
+        }
+        callback(null, toGeoJSON.kml(kmldom), warning);
+    } else if (fileType === 'xml') {
+        var xmldom = toDom(text),
+            result;
+        if (!xmldom) {
+            return callback({
+                message: 'Invalid XML file: not valid XML'
+            });
+        }
+        result = osmtogeojson.toGeojson(xmldom);
+        // only keep object tags as properties
+        result.features.forEach(function(feature) {
+            feature.properties = feature.properties.tags;
+        });
+        callback(null, result);
+    } else if (fileType === 'gpx') {
+        callback(null, toGeoJSON.gpx(toDom(text)));
+    } else if (fileType === 'geojson') {
+        try {
+            var gj = JSON.parse(text);
+            if (gj && gj.type === 'Topology' && gj.objects) {
+                var collection = { type: 'FeatureCollection', features: [] };
+                for (var o in gj.objects) {
+                    var ft = topojson.feature(gj, gj.objects[o]);
+                    if (ft.features) collection.features = collection.features.concat(ft.features);
+                    else collection.features = collection.features.concat([ft]);
+                }
+                return callback(null, collection);
+            } else {
+                return callback(null, gj);
+            }
+        } catch(err) {
+            alert('Invalid JSON file: ' + err);
+            return;
+        }
+    } else if (fileType === 'dsv') {
+        csv2geojson.csv2geojson(text, {
+            delimiter: 'auto'
+        }, function(err, result) {
+            if (err) {
+                return callback({
+                    type: 'geocode',
+                    result: result,
+                    raw: text
+                });
+            } else {
+                return callback(null, result);
+            }
+        });
+    } else if (fileType === 'gtfs') {
+        try {
+            return callback(null, gtfs2geojson(text));
+        } catch(e) {
+            return callback({ message: 'Invalid GTFS file' });
+        }
+    } else if (fileType === 'poly') {
+        callback(null, polytogeojson(text));
+    }
+
+    function toDom(x) {
+        return (new DOMParser()).parseFromString(x, 'text/xml');
+    }
+
+    function detectType(f, text) {
+        var filename = f.name ? f.name.toLowerCase() : '';
+        function ext(_) {
+            return filename.indexOf(_) !== -1;
+        }
+        if (f.type === 'application/vnd.google-earth.kml+xml' || ext('.kml')) {
+            return 'kml';
+        }
+        if (ext('.gpx')) return 'gpx';
+        if (ext('.geojson') || ext('.json') || ext('.topojson')) return 'geojson';
+        if (f.type === 'text/csv' || ext('.csv') || ext('.tsv') || ext('.dsv')) {
+            return 'dsv';
+        }
+        if (ext('.xml') || ext('.osm')) return 'xml';
+        if (ext('.poly')) return 'poly';
+        if (text && text.indexOf('shape_id,shape_pt_lat,shape_pt_lon') != -1) {
+          return 'gtfs';
+        }
+    }
+}
+
+},{"csv2geojson":10,"geojson-normalize":27,"gtfs2geojson":33,"osmtogeojson":66,"polytogeojson":87,"togeojson":105,"topojson":"topojson"}],172:[function(require,module,exports){
+var geojsonhint = require('geojsonhint');
+
+module.exports = function(callback) {
+    return function(editor, changeObj) {
+
+        var err = geojsonhint.hint(editor.getValue());
+        editor.clearGutter('error');
+
+        if (err instanceof Error) {
+            handleError(err.message);
+            return callback({
+                'class': 'icon-circle-blank',
+                title: 'invalid JSON',
+                message: 'invalid JSON'});
+        } else if (err.length) {
+            handleErrors(err);
+            return callback({
+                'class': 'icon-circle-blank',
+                title: 'invalid GeoJSON',
+                message: 'invalid GeoJSON'});
+        } else {
+            var zoom = changeObj.from.ch === 0 &&
+                changeObj.from.line === 0 &&
+                changeObj.origin == 'paste';
+
+            var gj = JSON.parse(editor.getValue());
+
+            try {
+                return callback(null, gj, zoom);
+            } catch(e) {
+                return callback({
+                    'class': 'icon-circle-blank',
+                    title: 'invalid GeoJSON',
+                    message: 'invalid GeoJSON'});
+            }
+        }
+
+        function handleError(msg) {
+            var match = msg.match(/line (\d+)/);
+            if (match && match[1]) {
+                editor.clearGutter('error');
+                editor.setGutterMarker(parseInt(match[1], 10) - 1, 'error', makeMarker(msg));
+            }
+        }
+
+        function handleErrors(errors) {
+            editor.clearGutter('error');
+            errors.forEach(function(e) {
+                editor.setGutterMarker(e.line, 'error', makeMarker(e.message));
+            });
+        }
+
+        function makeMarker(msg) {
+            return d3.select(document.createElement('div'))
+                .attr('class', 'error-marker')
+                .attr('message', msg).node();
+        }
+    };
+};
+
+},{"geojsonhint":32}],173:[function(require,module,exports){
+module.exports = function(context) {
+    var bounds = context.mapLayer.getBounds();
+    if (bounds.isValid()) context.map.fitBounds(bounds);
+};
+
+},{}],174:[function(require,module,exports){
+(function (Buffer){(function (){
+
+var marked = require('marked');
+
+module.exports = function(context) {
+    var html = Buffer("PGgyPkhlbHA8L2gyPg0KDQo8cD5OZXcgaGVyZT8gPHN0cm9uZz5nZW9qc29uLmlvPC9zdHJvbmc+IGlzIGEgcXVpY2ssIHNpbXBsZSB0b29sIGZvciBjcmVhdGluZywNCnZpZXdpbmcsIGFuZCBzaGFyaW5nIG1hcHMuIGdlb2pzb24uaW8gaXMgbmFtZWQgYWZ0ZXIgPGEgaHJlZj0naHR0cDovL2dlb2pzb24ub3JnLycgdGFyZ2V0PSdfYmxhbmsnPkdlb0pTT048L2E+LA0KYW4gb3BlbiBzb3VyY2UgZGF0YSBmb3JtYXQsIGFuZCBpdCBzdXBwb3J0cyBHZW9KU09OIGluIGFsbCB3YXlzIC0gYnV0IGFsc28NCmFjY2VwdHMgS01MLCBHUFgsIENTViwgR1RGUywgVG9wb0pTT04sIGFuZCBvdGhlciBmb3JtYXRzLjwvcD4NCg0KPHA+TmVlZCBleHRyYSBoZWxwIG9yIHNlZSBhIGJ1Zz8gPGEgdGFyZ2V0PSdfYmxhbmsnIGhyZWY9J2h0dHBzOi8vZ2l0aHViLmNvbS9tYXBib3gvZ2VvanNvbi5pby9pc3N1ZXM/c3RhdGU9b3Blbic+T3BlbiBhbiBpc3N1ZQ0KICAgIG9uIGdlb2pzb24uaW8ncyBpc3N1ZSB0cmFja2VyLjwvYT4NCg0KPGgzPkkndmUgZ290IGRhdGE8L2gzPg0KDQo8cD5JZiB5b3UgaGF2ZSBkYXRhLCBsaWtlIGEgS01MLCBHZW9KU09OLCBvciBDU1YgZmlsZSwganVzdCBkcmFnICZhbXA7IGRyb3ANCml0IG9udG8gdGhlIHBhZ2Ugb3IgY2xpY2sgJ09wZW4nIGFuZCAnRmlsZScgLSB5b3VyIGRhdGEgc2hvdWxkIGFwcGVhciBvbg0KdGhlIG1hcCE8L3A+DQoNCjxoMz5JIHdhbnQgdG8gZHJhdyBmZWF0dXJlczwvaDM+DQoNCjxwPkNsaWNrIHRoZSBkcmF3aW5nIHRvb2xzIG9uIHRoZSBsZWZ0LWhhbmQgc2lkZSB0byBkcmF3IHBvaW50cywgcG9seWdvbnMsDQpsaW5lcyBhbmQgcmVjdGFuZ2xlcy4gQWZ0ZXIgeW91J3JlIGRvbmUgZHJhd2luZyB0aGUgc2hhcGVzLCB5b3UgY2FuIGFkZA0KaW5mb3JtYXRpb24gdG8gZWFjaCBmZWF0dXJlIGJ5IGNsaWNraW5nIG9uIGl0LCBlZGl0aW5nIHRoZSBmZWF0dXJlJ3MgcHJvcGVydGllcywNCmFuZCBjbGlja2luZyAnU2F2ZScuPC9wPg0KDQo8cD5Qcm9wZXJ0aWVzIGluIEdlb0pTT04gYXJlIHN0b3JlZCBhcyAna2V5IHZhbHVlIHBhaXJzJyAtIHNvLCBmb3IgaW5zdGFuY2UsDQppZiB5b3Ugd2FudGVkIHRvIGFkZCBhIG5hbWUgdG8gZWFjaCBmZWF0dXJlLCB0eXBlICduYW1lJyBpbiB0aGUgZmlyc3QgdGFibGUNCmZpZWxkLCBhbmQgdGhlIG5hbWUgb2YgdGhlIGZlYXR1cmUgaW4gdGhlIHNlY29uZC48L3A+DQoNCjxoMz5JIHdhbnQgdG8gdXNlIG15IG1hcCBldmVyeXdoZXJlPC9oMz4NCg0KPHA+WW91IGNhbiBzaGFyZSBtYXBzIGluIHF1aXRlIGEgZmV3IHdheXMhIElmIHlvdSBzYXZlIHlvdXIgbWFwIGhlcmUsIHRoZSBVUkwNCm9mIHRoaXMgcGFnZSB3aWxsIHVwZGF0ZSBhbmQgeW91IGNhbiBsaW5rIHNlbmQgZnJpZW5kcyB0aGUgbGluayB0byBzaGFyZQ0KdGhlIG1hcCwgb3IgeW91IGNhbiBjbGljayAnRG93bmxvYWQnIHRvIGdyYWIgdGhlIHJhdyBHZW9KU09OIGRhdGEgYW5kIHVzZQ0KaXQgaW4gb3RoZXIgc29mdHdhcmUsIGxpa2UgVGlsZU1pbGwgb3IgTGVhZmxldC48L3A+DQoNCjxoMz5JJ20gYSBjb2RlcjwvaDM+DQoNCjxwPjxhIGhyZWY9JyNnZW9qc29uLWlvLWFwaSc+Z2VvanNvbi5pbyBoYXMgYW4gYXJyYXkgb2YgY2xpIHRvb2xzPC9hPg0KdGhhdCBtYWtlIGl0IGVhc3kgdG8gZ28gZnJvbSBhIEdlb0pTT04gZmlsZSBvbiB5b3VyIGNvbXB1dGVyIHRvIGdlb2pzb24uaW8uDQoNCjxoMz5Qcm90aXBzPzwvaDM+DQoNCjx1bD4NCiAgICA8bGk+PHN0cm9uZz5jbWQrczwvc3Ryb25nPjogc2F2ZSBtYXAgdG8gZ2l0aHViIGdpc3RzDQogICAgPGxpPjxzdHJvbmc+Y21kK2E8L3N0cm9uZz46IGRvd25sb2FkIG1hcCBhcyBnZW9qc29uDQogICAgPGxpPjxzdHJvbmc+YXJyb3cga2V5czwvc3Ryb25nPjogbmF2aWdhdGUgdGhlIG1hcA0KPC91bD4NCg0KPGgzPlByaXZhY3kgJmFtcDsgTGljZW5zZSBJc3N1ZXM8L2gzPg0KDQo8dWw+DQogICAgPGxpPjxzdHJvbmc+Q2xpY2tpbmcgc2F2ZTwvc3Ryb25nPiBieSBkZWZhdWx0IHNhdmVzIHRvIGEgcHJpdmF0ZQ0KICAgIEdpdEh1YiBHaXN0IC0gc28gaXQgd2lsbCBvbmx5IGJlIGFjY2Vzc2libGUgdG8gcGVvcGxlIHlvdSBzaGFyZSB0aGUgVVJMDQogICAgd2l0aCwgYW5kIGNyZWF0aW5nIGl0IHdvbid0IGFwcGVhciBpbiB5b3VyIEdpdEh1YiB0aW1lbGluZS4NCiAgICA8bGk+PHN0cm9uZz5UaGUgZGF0YSB5b3UgY3JlYXRlIGFuZCBtb2RpZnkgaW4gZ2VvanNvbi5pbzwvc3Ryb25nPiBkb2Vzbid0DQogICAgYWNxdWlyZSBhbnkgYWRkaXRpb25hbCBsaWNlbnNlOiBpZiBpdCdzIHNlY3JldCBhbmQgY29weXJpZ2h0ZWQsIGl0IHdpbGwgcmVtYWluDQogICAgdGhhdCB3YXkgLSBpdCBkb2Vzbid0IGhhdmUgdG8gYmUgcHVibGljIG9yIG9wZW4gc291cmNlLg0KPC91bD4NCg==","base64") +
+        '<br><hr><br>' +
+        marked("## Geojson.io API\r\nYou can interact with geojson.io programmatically in two ways:\r\n\r\n* [URL parameters](#url-api)\r\n* [Browser console](#console-api)\r\n* [Protips](#protips)\r\n\r\n## URL API\r\nYou can do a few interesting things with just URLs and geojson.io. Here are the\r\ncurrent URL formats.\r\n\r\n### `map`\r\n\r\nOpen the map at a specific location. The argument is numbers separated by `/`\r\nin the form `zoom/latitude/longitude`.\r\n\r\n#### Example:\r\n\r\nhttp://geojson.io/#map=2/20.0/0.0\r\n\r\n\r\n### `data=data:application/json,`\r\n\r\nOpen the map and load a chunk of [GeoJSON](http://geojson.org/) data from a\r\nURL segment directly onto the map. The GeoJSON data should be encoded\r\nas per `encodeURIComponent(JSON.stringify(geojson_data))`.\r\n\r\n#### Example:\r\n\r\nhttp://geojson.io/#data=data:application/json,%7B%22type%22%3A%22LineString%22%2C%22coordinates%22%3A%5B%5B0%2C0%5D%2C%5B10%2C10%5D%5D%7D\r\n\r\n\r\n### `data=data:text/x-url,`\r\n\r\nLoad GeoJSON data from a URL on the internet onto the map. The URL must\r\nrefer directly to a resource that is:\r\n\r\n* Freely accessible (not behind a password)\r\n* Supports [CORS](http://en.wikipedia.org/wiki/Cross-origin_resource_sharing)\r\n* Is valid GeoJSON\r\n\r\nThe URL should be encoded as per `encodeURIComponent(url)`.\r\n\r\n#### Example:\r\n\r\nhttp://geojson.io/#data=data:text/x-url,http%3A%2F%2Fapi.tiles.mapbox.com%2Fv3%2Ftmcw.map-gdv4cswo%2Fmarkers.geojson\r\n\r\n\r\n### `id=gist:`\r\n\r\nLoad GeoJSON data from a [GitHub Gist](https://gist.github.com/), given an argument\r\nin the form of `login/gistid`. The Gist can be public or private, and must\r\ncontain a file with a `.geojson` extension that is valid GeoJSON.\r\n\r\n#### Example:\r\n\r\nhttp://geojson.io/#id=gist:tmcw/e9a29ad54dbaa83dee08&map=8/39.198/-76.981\r\n\r\n\r\n### `id=github:`\r\n\r\nLoad a file from a GitHub repository. You must have access to the file, and\r\nit must be valid GeoJSON.\r\n\r\nThe url is in the form:\r\n\r\n    login/repository/blob/branch/filepath\r\n\r\n#### Example:\r\n\r\nhttp://geojson.io/#id=github:benbalter/dc-wifi-social/blob/master/bars.geojson&map=14/38.9140/-77.0302\r\n\r\n## Console API\r\n\r\n[Pop open your browser console](http://debugbrowser.com/) and see the beautiful\r\nexamples: geojson.io has started to expose a subset of its inner workings for\r\nyou to mess around with:\r\n\r\n\r\n### `window.api.map`\r\n\r\nThe [Leaflet](http://leafletjs.com/) map that you see and use on the site. See\r\nthe [Leaflet API](http://leafletjs.com/reference.html) for all the things you\r\ncan do with it.\r\n\r\nFor instance, you could add another map layer:\r\n\r\n```js\r\nwindow.api.map.addLayer(L.tileLayer('http://tile.stamen.com/watercolor/{z}/{x}/{y}.jpg'))\r\n```\r\n\r\n### `window.api.data`\r\n\r\nThe data model. See the [code to get an idea of how it works](https://github.com/mapbox/geojson.io/blob/gh-pages/src/core/data.js#L48-L90) -\r\nyou'll want to use stuff like `data.set({ map: { .. your geojson map information .. })`\r\nand `data.get('map')` and `data.mergeFeatures([arrayoffeatures])` to do your\r\ndirty business.\r\n\r\n## `window.api.mapLayer`\r\n\r\nThis is the Leaflet featureGroup that gets filled with features as you draw\r\nthem. You can operate on this directly to do advanced stuff like\r\nselecting a feature with its id:\r\n\r\n```js\r\nvar layers = [];\r\nwindow.api.mapLayer.eachLayer(l => { layers.push(l); });\r\nlayers.find(l => l.feature.id == 'a').openPopup();\r\n```\r\n\r\nThat example uses [arrow functions](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/Arrow_functions)\r\nwhich are supported in Chrome & Firefox.\r\n\r\n## `window.api.drawControl`\r\n\r\nExposes the [Leaflet.Draw](https://github.com/Leaflet/Leaflet.draw) control\r\ninstance in the console.\r\n\r\n## `window.api.on(event, fn)`\r\n\r\nExposes d3 events, including `change`.\r\n\r\n## Protips\r\n\r\nTo include `turf` from [turf](https://github.com/turfjs/turf) so you can manipulate features\r\nwith its GIS features, run this in the CLI, which will download the script and evaluate it.\r\n\r\n```js\r\nfetch('https://npmcdn.com/@turf/turf@3.1.1/turf.js').then(t => t.text()).then(eval)\r\n```\r\n");
+    function render(selection) {
+        var area = selection
+            .html('')
+            .append('div')
+            .attr('class', 'pad2 prose')
+            .html(html);
+    }
+
+    render.off = function() {
+    };
+
+    return render;
+};
+
+}).call(this)}).call(this,require("buffer").Buffer)
+},{"buffer":8,"marked":64}],175:[function(require,module,exports){
+var validate = require('../lib/validate'),
+    zoomextent = require('../lib/zoomextent'),
+    saver = require('../ui/saver.js');
+
+module.exports = function(context) {
+
+    CodeMirror.keyMap.tabSpace = {
+        Tab: function(cm) {
+            var spaces = new Array(cm.getOption('indentUnit') + 1).join(' ');
+            cm.replaceSelection(spaces, 'end', '+input');
+        },
+        'Ctrl-S': saveAction,
+        'Cmd-S': saveAction,
+        fallthrough: ['default']
+    };
+
+    function saveAction() {
+        saver(context);
+        return false;
+    }
+
+    function render(selection) {
+        var textarea = selection
+            .html('')
+            .append('textarea');
+
+        var editor = CodeMirror.fromTextArea(textarea.node(), {
+            mode: 'application/json',
+            matchBrackets: true,
+            tabSize: 2,
+            gutters: ['error'],
+            theme: 'eclipse',
+            autofocus: (window === window.top),
+            keyMap: 'tabSpace',
+            lineNumbers: true
+        });
+
+        editor.on('change', validate(changeValidated));
+
+        function changeValidated(err, data, zoom) {
+            if (!err) {
+              context.data.set({map: data}, 'json');
+              if (zoom) zoomextent(context);
+            }
+        }
+
+        context.dispatch.on('change.json', function(event) {
+            if (event.source !== 'json') {
+                var scrollInfo = editor.getScrollInfo();
+                editor.setValue(JSON.stringify(context.data.get('map'), null, 2));
+                editor.scrollTo(scrollInfo.left, scrollInfo.top);
+            }
+        });
+
+        editor.setValue(JSON.stringify(context.data.get('map'), null, 2));
+    }
+
+    render.off = function() {
+        context.dispatch.on('change.json', null);
+    };
+
+    return render;
+};
+
+},{"../lib/validate":172,"../lib/zoomextent":173,"../ui/saver.js":189}],176:[function(require,module,exports){
+// var metatable = require('d3-metatable')(d3),
+//     smartZoom = require('../lib/smartzoom.js');
+
+// module.exports = function(context) {
+//     function render(selection) {
+
+//         selection.html('');
+
+//         function rerender() {
+//             var geojson = context.data.get('map');
+//             var props;
+
+//             if (!geojson || !geojson.geometry &&
+//                 (!geojson.features || !geojson.features.length)) {
+//                 selection
+//                     .html('')
+//                     .append('div')
+//                     .attr('class', 'blank-banner center')
+//                     .text('no features');
+//             } else {
+//                 props = geojson.geometry ? [geojson.properties] :
+//                     geojson.features.map(getProperties);
+//                 selection.select('.blank-banner').remove();
+//                 selection
+//                     .data([props])
+//                     .call(metatable()
+//                         .on('change', function(row, i) {
+//                             var geojson = context.data.get('map');
+//                             if (geojson.geometry) {
+//                                 geojson.properties = row;
+//                             } else {
+//                                 geojson.features[i].properties = row;
+//                             }
+//                             context.data.set('map', geojson);
+//                         })
+//                         .on('rowfocus', function(row, i) {
+//                             var bounds = context.mapLayer.getBounds();
+//                             var j = 0;
+//                             context.mapLayer.eachLayer(function(l) {
+//                                 if (i === j++) smartZoom(context.map, l, bounds);
+//                             });
+//                         })
+//                     );
+//             }
+
+//         }
+
+//         context.dispatch.on('change.table', function(evt) {
+//             rerender();
+//         });
+
+//         rerender();
+
+//         function getProperties(f) { return f.properties; }
+
+//         function zoomToMap(p) {
+//             var layer;
+//             // layers.eachLayer(function(l) {
+//             //     if (p == l.feature.properties) layer = l;
+//             // });
+//             return layer;
+//         }
+//     }
+
+//     render.off = function() {
+//         context.dispatch.on('change.table', null);
+//     };
+
+//     return render;
+// };
+
+},{}],177:[function(require,module,exports){
+
+var tmpl = "<!DOCTYPE html>\r\n<html>\r\n<head>\r\n  <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' />\r\n  <style>\r\n  body { margin:0; padding:0; }\r\n  #map { position:absolute; top:0; bottom:0; width:100%; }\r\n  .marker-properties {\r\n    border-collapse:collapse;\r\n    font-size:11px;\r\n    border:1px solid #eee;\r\n    margin:0;\r\n}\r\n.marker-properties th {\r\n    white-space:nowrap;\r\n    border:1px solid #eee;\r\n    padding:5px 10px;\r\n}\r\n.marker-properties td {\r\n    border:1px solid #eee;\r\n    padding:5px 10px;\r\n}\r\n.marker-properties tr:last-child td,\r\n.marker-properties tr:last-child th {\r\n    border-bottom:none;\r\n}\r\n.marker-properties tr:nth-child(even) th,\r\n.marker-properties tr:nth-child(even) td {\r\n    background-color:#f7f7f7;\r\n}\r\n  </style>\r\n  <script src='//api.tiles.mapbox.com/mapbox.js/v2.2.2/mapbox.js'></script>\r\n  <script src='//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js' ></script>\r\n  <link href='//api.tiles.mapbox.com/mapbox.js/v2.2.2/mapbox.css' rel='stylesheet' />\r\n</head>\r\n<body>\r\n<div id='map'></div>\r\n<script type='text/javascript'>\r\nL.mapbox.accessToken = 'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXFhYTA2bTMyeW44ZG0ybXBkMHkifQ.gUGbDOPUN1v1fTs5SeOR4A';\r\nvar map = L.mapbox.map('map');\r\n\r\nL.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/256/{z}/{x}/{y}?access_token=' + L.mapbox.accessToken).addTo(map);\r\n\r\n$.getJSON('map.geojson', function(geojson) {\r\n    var geojsonLayer = L.mapbox.featureLayer(geojson).addTo(map);\r\n    var bounds = geojsonLayer.getBounds();\r\n    if (bounds.isValid()) {\r\n        map.fitBounds(geojsonLayer.getBounds());\r\n    } else {\r\n        map.setView([0, 0], 2);\r\n    }\r\n    geojsonLayer.eachLayer(function(l) {\r\n        showProperties(l);\r\n    });\r\n});\r\n\r\nfunction showProperties(l) {\r\n    var properties = l.toGeoJSON().properties;\r\n    var table = document.createElement('table');\r\n    table.setAttribute('class', 'marker-properties display')\r\n    for (var key in properties) {\r\n        var tr = createTableRows(key, properties[key]);\r\n        table.appendChild(tr);\r\n    }\r\n    if (table) l.bindPopup(table);\r\n}\r\n\r\nfunction createTableRows(key, value) {\r\n    var tr = document.createElement('tr');\r\n    var th = document.createElement('th');\r\n    var td = document.createElement('td');\r\n    key = document.createTextNode(key);\r\n    value = document.createTextNode(value);\r\n    th.appendChild(key);\r\n    td.appendChild(value);\r\n    tr.appendChild(th);\r\n    tr.appendChild(td);\r\n    return tr\r\n}\r\n\r\n</script>\r\n</body>\r\n</html>\r\n";
+
+var config = require('../config.js')(location.hostname);
+var githubBase = config.GithubAPI ? config.GithubAPI + '/api/v3': 'https://api.github.com';
+
+module.exports.save = save;
+module.exports.saveBlocks = saveBlocks;
+module.exports.load = load;
+module.exports.loadRaw = loadRaw;
+
+function saveBlocks(content, callback) {
+    d3.json(githubBase + '/gists')
+        .on('load', function(data) {
+            callback(null, data);
+        })
+        .on('error', function(err) {
+            var message,
+                url = /(http:\/\/\S*)/g;
+
+            message = JSON.parse(err.responseText).message
+                .replace(url, '<a href="$&">$&</a>');
+
+            callback(message);
+        })
+        .send('POST', JSON.stringify({
+            description: 'via:geojson.io',
+            public: false,
+            files: {
+                'index.html': { content: tmpl },
+                'map.geojson': { content: JSON.stringify(content) }
+            }
+        }));
+}
+
+function save(context, callback) {
+
+    var source = context.data.get('source'),
+        meta = context.data.get('meta'),
+        name = (meta && meta.name) || 'map.geojson',
+        map = context.data.get('map');
+
+    // var description = (source && source.description) || 'via:geojson.io',
+    //     public = source ? !!source.public : false;
+
+    context.user.details(onuser);
+
+    function onuser(err, user) {
+        var method = 'POST',
+            source = context.data.get('source'),
+            files = {};
+        var endpoint = githubBase + '/gists';
+
+        if (!err && user && user.login && meta &&
+            // check that it's not previously a github
+            source && source.id &&
+            // and it is mine
+            meta.login && user.login === meta.login) {
+            endpoint += '/' + source.id;
+            method = 'PATCH';
+        } else if (!err && source && source.id) {
+            endpoint += '/' + source.id + '/forks';
+        }
+
+        files[name] = {
+            content: JSON.stringify(map, null, 2)
+        };
+
+        context.user.signXHR(d3.json(endpoint))
+            .on('load', function(data) {
+                data.type = 'gist';
+                callback(null, data);
+            })
+            .on('error', function(err) {
+                var message,
+                    url = /(http:\/\/\S*)/g;
+
+                try {
+                    message = JSON.parse(err.responseText).message
+                        .replace(url, '<a href="$&">$&</a>');
+                } catch(e) {
+                    message = 'Sorry, an error occurred';
+                }
+
+                callback(message);
+            })
+            .send(method, JSON.stringify({
+                files: files
+            }));
+    }
+}
+
+function load(id, context, callback) {
+    var endpoint = githubBase + '/gists/';
+    context.user.signXHR(d3.json(endpoint + id))
+        .on('load', onLoad)
+        .on('error', onError)
+        .get();
+
+    function onLoad(json) { callback(null, json); }
+    function onError(err) { callback(err, null); }
+}
+
+function loadRaw(url, context, callback) {
+    context.user.signXHR(d3.text(url))
+        .on('load', onLoad)
+        .on('error', onError)
+        .get();
+
+    function onLoad(file) { callback(null, file); }
+    function onError(err) { callback(err, null); }
+}
+
+},{"../config.js":159}],178:[function(require,module,exports){
+module.exports.save = save;
+module.exports.load = load;
+module.exports.loadRaw = loadRaw;
+
+var config = require('../config.js')(location.hostname);
+var githubBase = config.GithubAPI ? config.GithubAPI + '/api/v3': 'https://api.github.com';
+
+function save(context, callback) {
+    var source = context.data.get('source'),
+        meta = context.data.get('meta'),
+        newpath = context.data.get('newpath'),
+        name = (meta && meta.name) || 'map.geojson',
+        map = context.data.get('map');
+
+    if (navigator.appVersion.indexOf('MSIE 9') !== -1 || !window.XMLHttpRequest) {
+        return alert('Sorry, saving and sharing is not supported in IE9 and lower. ' +
+            'Please use a modern browser to enjoy the full featureset of geojson.io');
+    }
+
+    if (!localStorage.github_token) {
+        return alert('You need to log in with GitHub to commit changes');
+    }
+
+    context.repo.details(onrepo);
+
+    function onrepo(err, repo) {
+        var commitMessage,
+            endpoint,
+            method = 'POST',
+            files = {};
+
+        if (!err && repo.permissions.push) {
+            commitMessage = context.commitMessage || prompt('Commit message:');
+            if (!commitMessage) return;
+
+            endpoint = source.url;
+            method = 'PUT';
+            var data = {
+                message: commitMessage,
+                branch: meta.branch,
+                content: btoa(encodeURIComponent(JSON.stringify(map, null, 2)).replace(/%([0-9A-F]{2})/g, function(match, p1) { return String.fromCharCode('0x' + p1); }))
+            };
+
+            // creating a file
+            if (newpath) {
+                data.path = newpath;
+                context.data.set({ newpath: null });
+            }
+
+            // updating a file
+            if (source.sha) {
+                data.sha = source.sha;
+            }
+        } else {
+            endpoint = githubBase + '/gists';
+            files[name] = { content: JSON.stringify(map, null, 2) };
+            data = { files: files };
+        }
+
+        context.user.signXHR(d3.json(endpoint))
+            .on('load', function(data) {
+                callback(null, data);
+            })
+            .on('error', function(err) {
+                var message,
+                    url = /(http:\/\/\S*)/g;
+
+                try {
+                    message = JSON.parse(err.responseText).message
+                        .replace(url, '<a href="$&">$&</a>');
+                } catch(e) {
+                    message = 'Sorry, an error occurred.';
+                }
+
+                callback(message);
+            })
+            .send(method, JSON.stringify(data));
+    }
+}
+
+function parseGitHubId(id) {
+    var parts = id.split('/');
+    return {
+        user: parts[0],
+        repo: parts[1],
+        mode: parts[2],
+        branch: parts[3],
+        file: parts.slice(4).join('/')
+    };
+}
+
+function load(parts, context, callback) {
+    context.user.signXHR(d3.json(fileUrl(parts)))
+        .on('load', onLoad)
+        .on('error', onError)
+        .get();
+
+    function onLoad(file) {
+        callback(null, file);
+    }
+    function onError(err) { callback(err, null); }
+}
+
+function loadRaw(parts, sha, context, callback) {
+    context.user.signXHR(d3.text(shaUrl(parts, sha)))
+        .on('load', onLoad)
+        .on('error', onError)
+        .header('Accept', 'application/vnd.github.raw')
+        .get();
+
+    function onLoad(file) {
+        callback(null, file);
+    }
+    function onError(err) { callback(err, null); }
+}
+
+function fileUrl(parts) {
+    return githubBase + '/repos/' +
+        parts.user +
+        '/' + parts.repo +
+        '/contents/' + parts.path +
+        '?ref=' + parts.branch;
+}
+
+function shaUrl(parts, sha) {
+    return githubBase + '/repos/' +
+        parts.user +
+        '/' + parts.repo +
+        '/git/blobs/' + sha;
+}
+
+},{"../config.js":159}],179:[function(require,module,exports){
+try {
+    
+} catch(e) {
+    console.warn(e);
+}
+
+module.exports.save = save;
+
+function save(context, callback) {
+
+    var path = context.data.get('path'),
+        map = context.data.get('map');
+
+    var content = JSON.stringify(map, null, 2);
+
+    fs.writeFile(path, content, function(err, res) {
+        callback(null, {
+            type: 'local',
+            path: path,
+            content: map
+        });
+    });
+}
+
+},{}],180:[function(require,module,exports){
+var buttons = require('./ui/mode_buttons'),
+    file_bar = require('./ui/file_bar'),
+    dnd = require('./ui/dnd'),
+    userUi = require('./ui/user'),
+    layer_switch = require('./ui/layer_switch');
+
+module.exports = ui;
+
+function ui(context) {
+    function init(selection) {
+
+        var container = selection
+            .append('div')
+            .attr('class', 'container');
+
+        var map = container
+            .append('div')
+            .attr('class', 'map')
+            .call(context.map)
+            .call(layer_switch(context));
+
+        context.container = container;
+
+        return container;
+    }
+
+    function render(selection) {
+
+        var container = init(selection);
+
+        var right = container
+            .append('div')
+            .attr('class', 'right');
+
+        var top = right
+            .append('div')
+            .attr('class', 'top');
+
+        top
+            .append('button')
+            .attr('class', 'collapse-button')
+            .attr('title', 'Collapse')
+            .on('click', function collapse() {
+                d3.select('body').classed('fullscreen',
+                    !d3.select('body').classed('fullscreen'));
+                var full = d3.select('body').classed('fullscreen');
+                d3.select(this)
+                    .select('.icon')
+                    .classed('icon-caret-up', !full)
+                    .classed('icon-caret-down', full);
+                context.map.invalidateSize();
+            })
+            .append('class', 'span')
+            .attr('class', 'icon icon-caret-up');
+
+        var pane = right
+            .append('div')
+            .attr('class', 'pane');
+
+        top
+            .append('div')
+            .attr('class', 'user fr pad1 deemphasize')
+            .call(userUi(context));
+
+        top
+            .append('div')
+            .attr('class', 'buttons')
+            .call(buttons(context, pane));
+
+        container
+            .append('div')
+            .attr('class', 'file-bar')
+            .call(file_bar(context));
+
+        dnd(context);
+    }
+
+
+    return {
+        read: init,
+        write: render
+    };
+}
+
+},{"./ui/dnd":181,"./ui/file_bar":182,"./ui/layer_switch":184,"./ui/mode_buttons":188,"./ui/user":191}],181:[function(require,module,exports){
+var readDrop = require('../lib/readfile.js').readDrop,
+    flash = require('./flash.js'),
+    zoomextent = require('../lib/zoomextent');
+
+module.exports = function(context) {
+    d3.select('body')
+        .attr('dropzone', 'copy')
+        .on('drop.import', readDrop(function(err, gj, warning) {
+            if (err && err.message) {
+                flash(context.container, err.message)
+                    .classed('error', 'true');
+            }
+            if (gj && gj.features) {
+                context.data.mergeFeatures(gj.features);
+                if (warning) {
+                    flash(context.container, warning.message);
+                } else {
+                    flash(context.container, 'Imported ' + gj.features.length + ' features.')
+                        .classed('success', 'true');
+                }
+                zoomextent(context);
+            }
+            d3.select('body').classed('dragover', false);
+        }))
+        .on('dragenter.import', over)
+        .on('dragleave.import', exit)
+        .on('dragover.import', over);
+
+   function over() {
+        d3.event.stopPropagation();
+        d3.event.preventDefault();
+        d3.event.dataTransfer.dropEffect = 'copy';
+        d3.select('body').classed('dragover', true);
+    }
+
+    function exit() {
+        d3.event.stopPropagation();
+        d3.event.preventDefault();
+        d3.event.dataTransfer.dropEffect = 'copy';
+        d3.select('body').classed('dragover', false);
+    }
+};
+
+},{"../lib/readfile.js":171,"../lib/zoomextent":173,"./flash.js":183}],182:[function(require,module,exports){
+var shpwrite = require('shp-write'),
+    clone = require('clone'),
+    geojson2dsv = require('geojson2dsv'),
+    topojson = require('topojson'),
+    saveAs = require('filesaver.js'),
+    tokml = require('tokml'),
+    // githubBrowser = require('@mapbox/github-file-browser'),
+    gistBrowser = require('@mapbox/gist-map-browser'),
+    geojsonNormalize = require('geojson-normalize'),
+    wellknown = require('wellknown');
+
+var share = require('./share'),
+    modal = require('./modal.js'),
+    flash = require('./flash'),
+    zoomextent = require('../lib/zoomextent'),
+    readFile = require('../lib/readfile'),
+    meta = require('../lib/meta.js'),
+    saver = require('../ui/saver.js'),
+    config = require('../config.js')(location.hostname);
+
+/**
+ * This module provides the file picking & status bar above the map interface.
+ * It dispatches to source implementations that interface with specific
+ * sources, like GitHub.
+ */
+module.exports = function fileBar(context) {
+
+    var shpSupport = typeof ArrayBuffer !== 'undefined';
+    var mapboxAPI = /a\.tiles\.mapbox.com/.test(L.mapbox.config.HTTP_URL);
+    var githubAPI = !!config.GithubAPI;
+    var githubBase = githubAPI ? config.GithubAPI + '/api/v3': 'https://api.github.com';
+
+    var exportFormats = [{
+        title: 'GeoJSON',
+        action: downloadGeoJSON
+    }, {
+        title: 'TopoJSON',
+        action: downloadTopo
+    }, {
+        title: 'CSV',
+        action: downloadDSV
+    }, {
+        title: 'KML',
+        action: downloadKML
+    }, {
+        title: 'WKT',
+        action: downloadWKT
+    }];
+
+    if (shpSupport) {
+        exportFormats.push({
+            title: 'Shapefile',
+            action: downloadShp
+        });
+    }
+
+    function bar(selection) {
+
+        var actions = [{
+            title: 'Save',
+            action: (mapboxAPI || githubAPI) ? saveAction : function() {},
+            children: exportFormats
+        }, {
+            title: 'New',
+            action: function() {
+                window.open(window.location.origin +
+                    window.location.pathname + '#new');
+            }
+        }, {
+            title: 'Meta',
+            action: function() {},
+            children: [
+                {
+                    title: 'Add map layer',
+                    alt: 'Add a custom tile layer',
+                    action: function() {
+                        var layerURL = prompt('Layer URL \n(http://tile.stamen.com/watercolor/{z}/{x}/{y}.jpg)');
+                        if (layerURL === null) return;
+                        var layerName = prompt('Layer name');
+                        if (layerName === null) return;
+                        meta.adduserlayer(context, layerURL, layerName);
+                    }
+                },
+                {
+                    title: 'Zoom to features',
+                    alt: 'Zoom to the extent of all features',
+                    action: function() {
+                        meta.zoomextent(context);
+                    }
+                },
+                {
+                    title: 'Clear',
+                    alt: 'Delete all features from the map',
+                    action: function() {
+                        if (confirm('Are you sure you want to delete all features from this map?')) {
+                            meta.clear(context);
+                        }
+                    }
+                }, {
+                    title: 'Random: Points',
+                    alt: 'Add random points to your map',
+                    action: function() {
+                        var response = prompt('Number of points (default: 100)');
+                        if (response === null) return;
+                        var count = parseInt(response, 10);
+                        if (isNaN(count)) count = 100;
+                        meta.random(context, count, 'point');
+                    }
+                }, {
+                    title: 'Add bboxes',
+                    alt: 'Add bounding box members to all applicable GeoJSON objects',
+                    action: function() {
+                        meta.bboxify(context);
+                    }
+                }, {
+                    title: 'Flatten Multi Features',
+                    alt: 'Flatten MultiPolygons, MultiLines, and GeometryCollections into simple geometries',
+                    action: function() {
+                        meta.flatten(context);
+                    }
+                }, {
+                    title: 'Load encoded polyline',
+                    alt: 'Decode and show an encoded polyline. Precision 5 is supported.',
+                    action: function() {
+                        meta.polyline(context);
+                    }
+                }, {
+                    title: 'Load WKB Base64 Encoded String',
+                    alt: 'Decode and show WKX data',
+                    action: function() {
+                        meta.wkxBase64(context);
+                    }
+                }, {
+                    title: 'Load WKB Hex Encoded String',
+                    alt: 'Decode and show WKX data',
+                    action: function() {
+                        meta.wkxHex(context);
+                    }
+                }, {
+                    title: 'Load WKT String',
+                    alt: 'Decode and show WKX data',
+                    action: function() {
+                        meta.wkxString(context);
+                    }
+                }
+            ]
+        }];
+
+        if (mapboxAPI || githubAPI) {
+            actions.unshift({
+                title: 'Open',
+                children: [
+                    {
+                        title: 'File',
+                        alt: 'GeoJSON, TopoJSON, GTFS, KML, CSV, GPX and OSM XML supported',
+                        action: blindImport
+                    }, {
+                        title: 'GitHub',
+                        alt: 'GeoJSON files in GitHub Repositories',
+                        authenticated: true,
+                        action: clickGitHubOpen
+                    }, {
+                        title: 'Gist',
+                        alt: 'GeoJSON files in GitHub Gists',
+                        authenticated: true,
+                        action: clickGist
+                    }
+                ]
+            });
+            actions[1].children.unshift({
+                    title: 'GitHub',
+                    alt: 'GeoJSON files in GitHub Repositories',
+                    authenticated: true,
+                    action: clickGitHubSave
+                }, {
+                    title: 'Gist',
+                    alt: 'GeoJSON files in GitHub Gists',
+                    authenticated: true,
+                    action: clickGistSave
+                });
+
+            if (mapboxAPI) actions.splice(3, 0, {
+                    title: 'Share',
+                    action: function() {
+                        context.container.call(share(context));
+                    }
+                });
+        } else {
+            actions.unshift({
+                title: 'Open',
+                alt: 'CSV, GTFS, KML, GPX, and other filetypes',
+                action: blindImport
+            });
+        }
+
+        var items = selection.append('div')
+            .attr('class', 'inline')
+            .selectAll('div.item')
+            .data(actions)
+            .enter()
+            .append('div')
+            .attr('class', 'item');
+
+        var buttons = items.append('a')
+            .attr('class', 'parent')
+            .on('click', function(d) {
+                if (d.action) d.action.apply(this, d);
+            })
+            .text(function(d) {
+                return ' ' + d.title;
+            });
+
+        items.each(function(d) {
+            if (!d.children) return;
+            d3.select(this)
+                .append('div')
+                .attr('class', 'children')
+                .call(submenu(d.children));
+        });
+
+        var name = selection.append('div')
+            .attr('class', 'name');
+
+        if (mapboxAPI || githubAPI) {
+            var filetype = name.append('a')
+                .attr('target', '_blank')
+                .attr('class', 'icon-file-alt');
+
+            var filename = name.append('span')
+                .attr('class', 'filename')
+                .text('unsaved');
+        }
+
+        function clickGistSave() {
+            if (d3.event) d3.event.preventDefault();
+            context.data.set({ type: 'gist' });
+            saver(context);
+        }
+
+        function saveAction() {
+            if (d3.event) d3.event.preventDefault();
+            saver(context);
+        }
+
+        function sourceIcon(type) {
+            if (type == 'github') return 'icon-github';
+            else if (type == 'gist') return 'icon-github-alt';
+            else return 'icon-file-alt';
+        }
+
+        function saveNoun(_) {
+            buttons.filter(function(b) {
+                return b.title === 'Save';
+            }).select('span.title').text(_);
+        }
+
+        function submenu(children) {
+            return function(selection) {
+                selection
+                    .selectAll('a')
+                    .data(children)
+                    .enter()
+                    .append('a')
+                    .attr('title', function(d) {
+                        if (d.title == 'File' || d.title == 'GitHub' || d.title == 'Gist' || d.title == 'Add map layer' || d.title == 'Zoom to features' || d.title == 'Clear' || d.title == 'Random: Points' || d.title == 'Add bboxes' || d.title == 'Flatten Multi Features') return d.alt;
+                    })
+                    .text(function(d) {
+                        return d.title;
+                    })
+                    .on('click', function(d) {
+                        d.action.apply(this, d);
+                    });
+            };
+        }
+
+        context.dispatch.on('change.filebar', onchange);
+
+        function clickGitHubOpen() {
+            // if (!context.user.token()) return flash(context.container, 'You must authenticate to use this API.');
+
+            // var m = modal(d3.select('div.geojsonio'));
+
+            // m.select('.m')
+            //     .attr('class', 'modal-splash modal col6');
+
+            // m.select('.content')
+            //     .append('div')
+            //     .attr('class', 'header pad2 fillD')
+            //     .append('h1')
+            //     .text('GitHub');
+
+            // githubBrowser(context.user.token(), false, githubBase)
+            //     .open()
+            //     .onclick(function(d) {
+            //         if (!d || !d.length) return;
+            //         var last = d[d.length - 1];
+            //         if (!last.path) {
+            //             throw new Error('last is invalid: ' + JSON.stringify(last));
+            //         }
+            //         if (!last.path.match(/\.(geo)?json/i)) {
+            //             return alert('only GeoJSON files are supported from GitHub');
+            //         }
+            //         if (last.type === 'blob') {
+            //             githubBrowser.request('/repos/' + d[1].full_name +
+            //                 '/git/blobs/' + last.sha, function(err, blob) {
+            //                     d.content = JSON.parse(decodeURIComponent(Array.prototype.map.call(atob(blob[0].content), function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')));
+            //                     context.data.parse(d);
+            //                     zoomextent(context);
+            //                     m.close();
+            //                 });
+            //         }
+            //     })
+            //     .appendTo(
+            //         m.select('.content')
+            //             .append('div')
+            //             .attr('class', 'repos pad2')
+            //             .node());
+        }
+
+        function clickGitHubSave() {
+            if (!context.user.token()) return flash(context.container, 'You must authenticate to use this API.');
+
+            var m = modal(d3.select('div.geojsonio'));
+
+            m.select('.m')
+                .attr('class', 'modal-splash modal col6');
+
+            m.select('.content')
+                .append('div')
+                .attr('class', 'header pad2 fillD')
+                .append('h1')
+                .text('GitHub');
+
+            githubBrowser(context.user.token(), true, githubBase)
+                .open()
+                .onclick(function(d) {
+                    if (!d || !d.length) return;
+                    var last = d[d.length - 1];
+                    var pathparts;
+                    var partial;
+
+                    // New file
+                    if (last.type === 'new')  {
+                        var filename = prompt('New file name');
+                        if (!filename) {
+                            m.close();
+                            return;
+                        }
+                        pathparts = d.slice(3);
+                        pathparts.pop();
+                        pathparts.push({ path: filename });
+                        partial = pathparts.map(function(p) {
+                            return p.path;
+                        }).join('/');
+                        context.data.set({
+                            source: {
+                                url: githubBase + '/repos/' +
+                                    d[0].login + '/' + d[1].name +
+                                        '/contents/' + partial +
+                                        '?ref=' + d[2].name
+                            },
+                            type: 'github',
+                            meta: {
+                                branch: d[2].name,
+                                login: d[0].login,
+                                repo: d[1].name
+                            }
+                        });
+                        context.data.set({ newpath: partial + filename });
+                        m.close();
+                        saver(context);
+                    }
+                    // Update a file
+                    else if (last.type === 'blob') {
+                        // Build the path
+                        pathparts = d.slice(3);
+                        partial = pathparts.map(function(p) {
+                            return p.path;
+                        }).join('/');
+
+
+                        context.data.set(
+                        {
+                            source: {
+                                url: githubBase + '/repos/' +
+                                    d[0].login + '/' + d[1].name +
+                                        '/contents/' + partial +
+                                        '?ref=' + d[2].name,
+                                sha: last.sha
+                            },
+                            type: 'github',
+                            meta: {
+                                branch: d[2].name,
+                                login: d[0].login,
+                                repo: d[1].name
+                            }
+                        });
+                        m.close();
+                        saver(context);
+                    }
+                })
+                .appendTo(
+                    m.select('.content')
+                        .append('div')
+                        .attr('class', 'repos pad2')
+                        .node());
+        }
+
+        function clickGist() {
+            if (!context.user.token()) return flash(context.container, 'You must authenticate to use this API.');
+
+            var m = modal(d3.select('div.geojsonio'));
+
+            m.select('.m')
+                .attr('class', 'modal-splash modal col6');
+
+            gistBrowser(context.user.token(), githubBase)
+                .open()
+                .onclick(function(d) {
+                    context.data.parse(d);
+                    zoomextent(context);
+                    m.close();
+                })
+                .appendTo(
+                    m.select('.content')
+                        .append('div')
+                        .attr('class', 'repos pad2')
+                        .node());
+        }
+
+        function onchange(d) {
+            var data = d.obj,
+                type = data.type,
+                path = data.path;
+            if (mapboxAPI || githubAPI) filename
+                .text(path ? path : 'unsaved')
+                .classed('deemphasize', context.data.dirty);
+            if (mapboxAPI || githubAPI) filetype
+                .attr('href', data.url)
+                .attr('class', sourceIcon(type));
+            saveNoun(type == 'github' ? 'Commit' : 'Save');
+        }
+
+        function blindImport() {
+            var put = d3.select('body')
+                .append('input')
+                .attr('type', 'file')
+                .style('visibility', 'hidden')
+                .style('position', 'absolute')
+                .style('height', '0')
+                .on('change', function() {
+                    var files = this.files;
+                    if (!(files && files[0])) return;
+                    readFile.readAsText(files[0], function(err, text) {
+                        readFile.readFile(files[0], text, onImport);
+                        if (files[0].path) {
+                            context.data.set({
+                                path: files[0].path
+                            });
+                        }
+                    });
+                    put.remove();
+                });
+            put.node().click();
+        }
+
+        function onImport(err, gj, warning) {
+            gj = geojsonNormalize(gj);
+            if (gj) {
+                context.data.mergeFeatures(gj.features);
+                if (warning) {
+                    flash(context.container, warning.message);
+                } else {
+                    flash(context.container, 'Imported ' + gj.features.length + ' features.')
+                        .classed('success', 'true');
+                }
+                zoomextent(context);
+            }
+        }
+
+        d3.select(document).call(
+            d3.keybinding('file_bar')
+                .on('⌘+o', function() {
+                    blindImport();
+                    d3.event.preventDefault();
+                })
+                .on('⌘+s', saveAction));
+    }
+
+    function downloadTopo() {
+        var content = JSON.stringify(topojson.topology({
+            collection: clone(context.data.get('map'))
+        }, {'property-transform': allProperties}));
+
+        saveAs(new Blob([content], {
+            type: 'text/plain;charset=utf-8'
+        }), 'map.topojson');
+
+    }
+
+    function downloadGeoJSON() {
+        if (d3.event) d3.event.preventDefault();
+        var content = JSON.stringify(context.data.get('map'));
+        var meta = context.data.get('meta');
+        saveAs(new Blob([content], {
+            type: 'text/plain;charset=utf-8'
+        }), (meta && meta.name) || 'map.geojson');
+    }
+
+    function downloadDSV() {
+        if (d3.event) d3.event.preventDefault();
+        var content = geojson2dsv(context.data.get('map'));
+        saveAs(new Blob([content], {
+            type: 'text/plain;charset=utf-8'
+        }), 'points.csv');
+    }
+
+    function downloadKML() {
+        if (d3.event) d3.event.preventDefault();
+        var content = tokml(context.data.get('map'));
+        var meta = context.data.get('meta');
+        saveAs(new Blob([content], {
+            type: 'text/plain;charset=utf-8'
+        }), 'map.kml');
+    }
+
+    function downloadShp() {
+        if (d3.event) d3.event.preventDefault();
+        d3.select('.map').classed('loading', true);
+        try {
+            shpwrite.download(context.data.get('map'));
+        } finally {
+            d3.select('.map').classed('loading', false);
+        }
+    }
+
+    function downloadWKT() {
+        if (d3.event) d3.event.preventDefault();
+        var contentArray = [];
+        var features = context.data.get('map').features;
+        if (features.length === 0) return;
+        var content = features.map(wellknown.stringify).join('\n');
+        var meta = context.data.get('meta');
+        saveAs(new Blob([content], {
+            type: 'text/plain;charset=utf-8'
+        }), 'map.wkt');
+    }
+
+    function allProperties(properties, key, value) {
+        properties[key] = value;
+        return true;
+    }
+
+    return bar;
+};
+
+},{"../config.js":159,"../lib/meta.js":169,"../lib/readfile":171,"../lib/zoomextent":173,"../ui/saver.js":189,"./flash":183,"./modal.js":187,"./share":190,"@mapbox/gist-map-browser":2,"clone":9,"filesaver.js":20,"geojson-normalize":27,"geojson2dsv":31,"shp-write":91,"tokml":106,"topojson":"topojson","wellknown":142}],183:[function(require,module,exports){
+var message = require('./message');
+
+module.exports = flash;
+
+function flash(selection, txt) {
+    'use strict';
+
+    var msg = message(selection);
+
+    if (txt) msg.select('.content').html(txt);
+
+    setTimeout(function() {
+        msg
+            .transition()
+            .style('opacity', 0)
+            .remove();
+    }, 5000);
+
+    return msg;
+}
+
+},{"./message":186}],184:[function(require,module,exports){
+module.exports = function(context) {
+
+    return function(selection) {
+        var layers;
+
+        if (!(/a\.tiles\.mapbox.com/).test(L.mapbox.config.HTTP_URL)) {
+            layers = [{
+                title: 'Mapbox',
+                layer: L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/256/{z}/{x}/{y}?access_token=' + L.mapbox.accessToken, {maxZoom: 22, attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="http://osm.org/copyright">OpenStreetMap</a>'})
+            }, {
+                title: 'Mapbox Outdoors',
+                layer: L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/outdoors-v11/tiles/256/{z}/{x}/{y}?access_token=' + L.mapbox.accessToken, {maxZoom: 22,  attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="http://osm.org/copyright">OpenStreetMap</a>'})
+            }, {
+                title: 'Satellite',
+                layer: L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/256/{z}/{x}/{y}?access_token=' + L.mapbox.accessToken, {maxZoom: 22, attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.maxar.com/">Maxar</a>'})
+            }];
+
+        } else {
+            layers = [{
+                title: 'Mapbox',
+                layer: L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/256/{z}/{x}/{y}?access_token=' + L.mapbox.accessToken, {maxZoom: 22, attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="http://osm.org/copyright">OpenStreetMap</a>'})
+            }, {
+                title: 'Satellite',
+                layer: L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/256/{z}/{x}/{y}?access_token=' + L.mapbox.accessToken, {maxZoom: 22, attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.maxar.com/">Maxar</a>'})
+            }, {
+                title: 'OSM',
+                layer: L.tileLayer('https://a.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a>'
+                })
+            }
+            // OCM tiles from Thunderforest require an API key. Add your key and uncomment the lines
+            // below to enable the OCM layer.
+            //
+            // , {
+            //    title: 'OCM',
+            //    layer: L.tileLayer('https://a.tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=<insert-your-apikey-here>', {
+            //       attribution: 'Maps &copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, Data &copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+            //    })
+            // }
+            ];
+        }
+
+        var layerSwap = function(d) {
+            var clicked = this instanceof d3.selection ? this.node() : this;
+            layerButtons.classed('active', function() {
+                return clicked === this;
+            });
+            layers.forEach(swap);
+            function swap(l) {
+                var datum = d instanceof d3.selection ? d.datum() : d;
+                if (l.layer == datum.layer) context.map.addLayer(datum.layer);
+                else if (context.map.hasLayer(l.layer)) context.map.removeLayer(l.layer);
+            }
+        };
+
+        var layerButtons = selection.append('div')
+            .attr('class', 'layer-switch')
+            .selectAll('button')
+            .data(layers)
+            .enter()
+            .append('button')
+            .attr('class', 'pad0x')
+            .on('click', layerSwap)
+            .text(function(d) { return d.title; });
+
+        layerButtons.filter(function(d, i) { return i === 0; }).call(layerSwap);
+
+    };
+};
+
+},{}],185:[function(require,module,exports){
+require('qs-hash');
+require('../lib/custom_hash.js');
+
+var popup = require('../lib/popup'),
+    escape = require('escape-html'),
+    LGeo = require('leaflet-geodesy'),
+    geojsonRewind = require('geojson-rewind'),
+    writable = false,
+    showStyle = true,
+    makiValues = require('../../data/maki.json'),
+    maki = '';
+
+for (var i = 0; i < makiValues.length; i++) {
+    maki += '<option value="' + makiValues[i].icon + '">';
+}
+
+module.exports = function(context, readonly) {
+
+    writable = !readonly;
+
+    function map(selection) {
+        context.map = L.mapbox.map(selection.node(), null)
+            .setView([20, 0], 2)
+            .addControl(L.mapbox.geocoderControl('mapbox.places', {
+                position: 'topright'
+            }));
+
+        L.control.scale().setPosition('bottomright').addTo(context.map);
+        context.map.zoomControl.setPosition('topright');
+
+        L.hash(context.map);
+
+        context.mapLayer = L.featureGroup().addTo(context.map);
+
+        if (writable) {
+          context.drawControl = new L.Control.Draw({
+              position: 'topright',
+              edit: { featureGroup: context.mapLayer },
+              draw: {
+                  circle: false,
+                  polyline: { metric: (navigator.language !== 'en-us' && navigator.language !== 'en-US') },
+                  polygon: { metric: (navigator.language !== 'en-us' && navigator.language !== 'en-US') },
+                  marker: {
+                      icon: L.mapbox.marker.icon({})
+                  }
+              }
+          }).addTo(context.map);
+
+          context.map
+            .on('draw:edited', update)
+            .on('draw:deleted', update);
+        }
+
+        context.map
+            .on('draw:created', created)
+            .on('popupopen', popup(context));
+
+        context.map.attributionControl.setPrefix('<a target="_blank" href="http://geojson.io/about.html">About</a>');
+
+        function update() {
+            var geojson = context.mapLayer.toGeoJSON();
+            geojson = geojsonRewind(geojson);
+            geojsonToLayer(geojson, context.mapLayer);
+            context.data.set({map: layerToGeoJSON(context.mapLayer)}, 'map');
+        }
+
+        context.dispatch.on('change.map', function() {
+            geojsonToLayer(context.data.get('map'), context.mapLayer);
+        });
+
+        function created(e) {
+            context.mapLayer.addLayer(e.layer);
+            update();
+        }
+    }
+
+    function layerToGeoJSON(layer) {
+        var features = [];
+        layer.eachLayer(collect);
+        function collect(l) { if ('toGeoJSON' in l) features.push(l.toGeoJSON()); }
+        return {
+            type: 'FeatureCollection',
+            features: features
+        };
+    }
+
+    return map;
+};
+
+function geojsonToLayer(geojson, layer) {
+    layer.clearLayers();
+    L.geoJson(geojson, {
+        style: L.mapbox.simplestyle.style,
+        pointToLayer: function(feature, latlon) {
+            if (!feature.properties) feature.properties = {};
+            return L.mapbox.marker.style(feature, latlon);
+        }
+    }).eachLayer(add);
+    function add(l) {
+        bindPopup(l);
+        l.addTo(layer);
+    }
+}
+
+function bindPopup(l) {
+
+    var props = JSON.parse(JSON.stringify(l.toGeoJSON().properties)),
+        table = '',
+        info = '';
+
+    var properties = {};
+
+    // Steer clear of XSS
+    for (var k in props) {
+        var e = escape(k);
+        // users don't want to see "[object Object]"
+        if (typeof props[k] === 'object') {
+          properties[e] = escape(JSON.stringify(props[k]));
+        } else {
+          properties[e] = escape(props[k]);
+        }
+    }
+
+    if (!properties) return;
+
+    if (!Object.keys(properties).length) properties = { '': '' };
+
+    if (l.feature && l.feature.geometry && writable) {
+        if (l.feature.geometry.type === 'Point' || l.feature.geometry.type === 'MultiPoint') {
+            if (!('marker-color' in properties)) {
+                table += '<tr class="style-row"><th><input type="text" value="marker-color"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                    '<td><input type="color" value="#7E7E7E"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
+            }
+            if (!('marker-size' in properties)) {
+                table += '<tr class="style-row"><th><input type="text" value="marker-size"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                    '<td><input type="text" list="marker-size" value="medium"' + (!writable ? ' readonly' : '') + ' /><datalist id="marker-size"><option value="small"><option value="medium"><option value="large"></datalist></td></tr>';
+            }
+            if (!('marker-symbol' in properties)) {
+                table += '<tr class="style-row"><th><input type="text" value="marker-symbol"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                    '<td><input type="text" list="marker-symbol" value=""' + (!writable ? ' readonly' : '') + ' /><datalist id="marker-symbol">' + maki + '</datalist></td></tr>';
+            }
+        }
+        if (l.feature.geometry.type === 'LineString' || l.feature.geometry.type === 'MultiLineString' || l.feature.geometry.type === 'Polygon' || l.feature.geometry.type === 'MultiPolygon') {
+            if (!('stroke' in properties)) {
+                table += '<tr class="style-row"><th><input type="text" value="stroke"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                    '<td><input type="color" value="#555555"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
+            }
+            if (!('stroke-width' in properties)) {
+                table += '<tr class="style-row"><th><input type="text" value="stroke-width"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                    '<td><input type="number" min="0" step="0.1" value="2"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
+            }
+            if (!('stroke-opacity' in properties)) {
+                table += '<tr class="style-row"><th><input type="text" value="stroke-opacity"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                    '<td><input type="number" min="0" max="1" step="0.1" value="1"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
+            }
+        }
+        if (l.feature.geometry.type === 'Polygon' || l.feature.geometry.type === 'MultiPolygon') {
+            if (!('fill' in properties)) {
+                table += '<tr class="style-row"><th><input type="text" value="fill"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                    '<td><input type="color" value="#555555"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
+            }
+            if (!('fill-opacity' in properties)) {
+                table += '<tr class="style-row"><th><input type="text" value="fill-opacity"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                    '<td><input type="number" min="0" max="1" step="0.1" value="0.5"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
+            }
+        }
+    }
+
+    for (var key in properties) {
+        if ((key == 'marker-color' || key == 'stroke' || key == 'fill') && writable) {
+            table += '<tr class="style-row"><th><input type="text" value="' + key + '"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                '<td><input type="color" value="' + properties[key] + '"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
+        }
+        else if (key == 'marker-size' && writable) {
+            table += '<tr class="style-row"><th><input type="text" value="' + key + '"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                '<td><input type="text" list="marker-size" value="' + properties[key] + '"' + (!writable ? ' readonly' : '') + ' /><datalist id="marker-size"><option value="small"><option value="medium"><option value="large"></datalist></td></tr>';
+        }
+        else if (key == 'marker-symbol' && writable) {
+            table += '<tr class="style-row"><th><input type="text" value="' + key + '"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                '<td><input type="text" list="marker-symbol" value="' + properties[key] + '"' + (!writable ? ' readonly' : '') + ' /><datalist id="marker-symbol">' + maki + '</datalist></td></tr>';
+        }
+        else if (key == 'stroke-width' && writable) {
+            table += '<tr class="style-row"><th><input type="text" value="' + key + '"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                '<td><input type="number" min="0" step="0.1" value="' + properties[key] + '"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
+        }
+        else if ((key == 'stroke-opacity' || key == 'fill-opacity') && writable) {
+            table += '<tr class="style-row"><th><input type="text" value="' + key + '"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                '<td><input type="number" min="0" max="1" step="0.1" value="' + properties[key] + '"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
+        }
+        else {
+            table += '<tr><th><input type="text" value="' + key + '"' + (!writable ? ' readonly' : '') + ' /></th>' +
+                '<td><input type="text" value="' + properties[key] + '"' + (!writable ? ' readonly' : '') + ' /></td></tr>';
+        }
+    }
+
+    if (l.feature && l.feature.geometry) {
+        info += '<table class="metadata">';
+        if (l.feature.geometry.type === 'LineString') {
+            var total = d3.pairs(l.feature.geometry.coordinates).reduce(function(total, pair) {
+                return total + L.latLng(pair[0][1], pair[0][0])
+                    .distanceTo(L.latLng(pair[1][1], pair[1][0]));
+            }, 0);
+            info += '<tr><td>Meters</td><td>' + total.toFixed(2) + '</td></tr>' +
+                    '<tr><td>Kilometers</td><td>' + (total / 1000).toFixed(2) + '</td></tr>' +
+                    '<tr><td>Feet</td><td>' + (total / 0.3048).toFixed(2) + '</td></tr>' +
+                    '<tr><td>Yards</td><td>' + (total / 0.9144).toFixed(2) + '</td></tr>' +
+                    '<tr><td>Miles</td><td>' + (total / 1609.34).toFixed(2) + '</td></tr>';
+        } else if (l.feature.geometry.type === 'Point') {
+            info += '<tr><td>Latitude </td><td>' + l.feature.geometry.coordinates[1].toFixed(4) + '</td></tr>' +
+                    '<tr><td>Longitude</td><td>' + l.feature.geometry.coordinates[0].toFixed(4) + '</td></tr>';
+        } else if (l.feature.geometry.type === 'Polygon') {
+          info += '<tr><td>Sq. Meters</td><td>' + (LGeo.area(l)).toFixed(2) + '</td></tr>' +
+                  '<tr><td>Sq. Kilometers</td><td>' + (LGeo.area(l) / 1000000).toFixed(2) + '</td></tr>' +
+                  '<tr><td>Sq. Feet</td><td>' + (LGeo.area(l) / 0.092903).toFixed(2) + '</td></tr>' +
+                  '<tr><td>Acres</td><td>' + (LGeo.area(l) / 4046.86).toFixed(2) + '</td></tr>' +
+                  '<tr><td>Sq. Miles</td><td>' + (LGeo.area(l) / 2589990).toFixed(2) + '</td></tr>';
+        }
+        info += '</table>';
+    }
+
+    var tabs = '<div class="pad1 tabs-ui clearfix col12">' +
+                    '<div class="tab col12">' +
+                        '<input class="hide" type="radio" id="properties" name="tab-group" checked="true">' +
+                        '<label class="keyline-top keyline-right tab-toggle pad0 pin-bottomleft z10 center col6" for="properties">Properties</label>' +
+                        '<div class="space-bottom1 col12 content">' +
+                            '<table class="space-bottom0 marker-properties">' + table + '</table>' +
+                            (writable ? '<div class="add-row-button add fl col3"><span class="icon-plus"> Add row</div>' +
+                            '<div class="fl text-right col9"><input type="checkbox" id="show-style" name="show-style" value="true" checked><label for="show-style">Show style properties</label></div>' : '') +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="space-bottom2 tab col12">' +
+                        '<input class="hide" type="radio" id="info" name="tab-group">' +
+                        '<label class="keyline-top tab-toggle pad0 pin-bottomright z10 center col6" for="info">Info</label>' +
+                        '<div class="space-bottom1 col12 content">' +
+                            '<div class="marker-info">' + info + ' </div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+
+    var content = tabs +
+        (writable ? '<div class="clearfix col12 pad1 keyline-top">' +
+            '<div class="pill col6">' +
+            '<button class="save col6 major">Save</button> ' +
+            '<button class="minor col6 cancel">Cancel</button>' +
+            '</div>' +
+            '<button class="col6 text-right pad0 delete-invert"><span class="icon-remove-sign"></span> Delete feature</button></div>' : '');
+
+    l.bindPopup(L.popup({
+        closeButton: false,
+        maxWidth: 500,
+        maxHeight: 400,
+        autoPanPadding: [5, 45],
+        className: 'geojsonio-feature'
+    }, l).setContent(content));
+
+    l.on('popupopen', function(e){
+        if (showStyle === false) {
+            d3.select('#show-style').property('checked', false);
+              d3.selectAll('.style-row').style('display','none');
+        }
+        d3.select('#show-style').on('click', function() {
+            if (this.checked) {
+                showStyle = true;
+                d3.selectAll('.style-row').style('display','');
+            } else {
+                showStyle = false;
+                d3.selectAll('.style-row').style('display','none');
+            }
+        });
+    });
+}
+
+},{"../../data/maki.json":1,"../lib/custom_hash.js":168,"../lib/popup":170,"escape-html":18,"geojson-rewind":30,"leaflet-geodesy":62,"qs-hash":89}],186:[function(require,module,exports){
+module.exports = message;
+
+function message(selection) {
+    'use strict';
+
+    selection.select('div.message').remove();
+
+    var sel = selection.append('div')
+        .attr('class', 'message pad1');
+
+    sel.append('a')
+        .attr('class', 'icon-remove fr')
+        .on('click', function() {
+            sel.remove();
+        });
+
+    sel.append('div')
+        .attr('class', 'content');
+
+    sel
+        .style('opacity', 0)
+        .transition()
+        .duration(200)
+        .style('opacity', 1);
+
+    sel.close = function() {
+        sel
+            .transition()
+            .duration(200)
+            .style('opacity', 0)
+            .remove();
+        sel
+            .transition()
+            .duration(200)
+            .style('top', '0px');
+    };
+
+    return sel;
+}
+
+},{}],187:[function(require,module,exports){
+module.exports = function(selection, blocking) {
+
+    var previous = selection.select('div.modal');
+    var animate = previous.empty();
+
+    previous.transition()
+        .duration(200)
+        .style('opacity', 0)
+        .remove();
+
+    var shaded = selection
+        .append('div')
+        .attr('class', 'shaded')
+        .style('opacity', 0);
+
+    shaded.close = function() {
+        shaded
+            .transition()
+            .duration(200)
+            .style('opacity',0)
+            .remove();
+        modal
+            .transition()
+            .duration(200)
+            .style('top','0px');
+        keybinding.off();
+    };
+
+    var keybinding = d3.keybinding('modal')
+        .on('⌫', shaded.close)
+        .on('⎋', shaded.close);
+
+    d3.select(document).call(keybinding);
+
+    var modal = shaded.append('div')
+        .attr('class', 'modal fillL col6');
+
+        shaded.on('click.remove-modal', function() {
+            if (d3.event.target === this && !blocking) shaded.close();
+        });
+
+    modal.append('button')
+        .attr('class', 'close')
+        .on('click', function() {
+            if (!blocking) shaded.close();
+        })
+        .append('div')
+            .attr('class','icon close');
+
+    modal.append('div')
+        .attr('class', 'content');
+
+    if (animate) {
+        shaded.transition().style('opacity', 1);
+        modal
+            .style('top','0px')
+            .transition()
+            .duration(200)
+            .style('top','40px');
+    } else {
+        shaded.style('opacity', 1);
+    }
+
+
+    return shaded;
+};
+
+},{}],188:[function(require,module,exports){
+var table = require('../panel/table'),
+    json = require('../panel/json'),
+    help = require('../panel/help');
+
+module.exports = function(context, pane) {
+    return function(selection) {
+
+        var mode = null;
+
+        var buttonData = [{
+            icon: 'code',
+            title: ' JSON',
+            alt: 'JSON Source',
+            behavior: json
+        }, {
+            icon: 'table',
+            title: ' Table',
+            alt: 'Edit feature properties in a table',
+            behavior: table
+        }, {
+            icon: 'question',
+            title: ' Help',
+            alt: 'Help',
+            behavior: help
+        }];
+
+        var buttons = selection
+            .selectAll('button')
+            .data(buttonData, function(d) { return d.icon; });
+
+        var enter = buttons.enter()
+            .append('button')
+            .attr('title', function(d) { return d.alt; })
+            .on('click', buttonClick);
+        enter.append('span')
+            .attr('class', function(d) { return 'icon-' + d.icon; });
+        enter
+            .append('span')
+            .text(function(d) { return d.title; });
+
+        d3.select(buttons.node()).trigger('click');
+
+        function buttonClick(d) {
+            buttons.classed('active', function(_) { return d.icon == _.icon; });
+            if (mode) mode.off();
+            mode = d.behavior(context);
+            pane.call(mode);
+        }
+    };
+};
+
+},{"../panel/help":174,"../panel/json":175,"../panel/table":176}],189:[function(require,module,exports){
+var flash = require('./flash');
+
+module.exports = function(context) {
+    if (d3.event) d3.event.preventDefault();
+
+    function success(err, res) {
+        if (err) return flash(context.container, err.toString());
+
+        var message,
+          url,
+          path,
+          commitMessage,
+          type = context.data.get('type');
+
+        if (type === 'gist' || res.type === 'gist') {
+            // Saved as Gist
+            message = 'Changes to this map saved to Gist: ';
+            url = res.html_url;
+            path = res.id;
+        } else if (type === 'github') {
+            // Committed to GitHub
+            message = 'Changes committed to GitHub: ';
+            url = res.commit.html_url;
+            path = res.commit.sha.substring(0, 10);
+        } else {
+            // Saved as a file
+            message = 'Changes saved to disk.';
+        }
+
+        flash(context.container, message + (url ? '<a href="' + url + '">' + path + '</a>' : ''));
+
+        context.container.select('.map').classed('loading', false);
+        context.data.parse(res);
+    }
+
+    var meta = context.data.get('meta'),
+        map = context.data.get('map'),
+        features = map && map.geometry || (map.features && map.features.length),
+        type = context.data.get('type');
+
+    if (!features) {
+        return flash(context.container, 'Add a feature to the map to save it');
+    }
+
+    context.container.select('.map').classed('loading', true);
+
+    if (type === 'github') {
+        context.repo.details(onrepo);
+    } else {
+        context.data.save(success);
+    }
+
+    function onrepo(err, repo) {
+        if (!err && repo.permissions.push) {
+            var msg = prompt('Commit Message');
+            if (!msg) {
+                context.container.select('.map').classed('loading', false);
+                return;
+            }
+            context.commitMessage = msg;
+            context.data.save(success);
+        } else {
+            context.data.save(success);
+        }
+    }
+};
+
+},{"./flash":183}],190:[function(require,module,exports){
+var gist = require('../source/gist'),
+    modal = require('./modal');
+
+module.exports = share;
+
+function facebookUrl(_) {
+    return 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(_);
+}
+
+function twitterUrl(_) {
+    return 'https://twitter.com/intent/tweet?source=webclient&text=' + encodeURIComponent(_);
+}
+
+function emailUrl(_) {
+    return 'mailto:?subject=' + encodeURIComponent('My Map on geojson.io') + '&body=Here\'s the link: ' + encodeURIComponent(_);
+}
+
+function share(context) {
+    return function(selection) {
+        gist.saveBlocks(context.data.get('map'), function(err, res) {
+            var m = modal(d3.select('div.geojsonio'));
+            m.select('.m')
+                .attr('class', 'modal-splash modal col6');
+
+            var content = m.select('.content');
+
+            content.append('div')
+                .attr('class', 'header pad2 fillD')
+                .append('h1')
+                .text('Share');
+
+            if (err || !res) {
+                content
+                    .append('div')
+                    .attr('class', 'pad2')
+                    .text('Could not share: an error occurred: ' + err);
+            } else {
+                var container = content.append('div').attr('class', 'pad2');
+                var url = container.append('input')
+                    .style('width', '100%')
+                    .property('value', 'http://bl.ocks.org/d/' + res.id);
+                container.append('p')
+                    .text('URL to the full-screen map in that embed');
+            }
+        });
+    };
+}
+
+},{"../source/gist":177,"./modal":187}],191:[function(require,module,exports){
+module.exports = function(context) {
+    if (!(/a\.tiles\.mapbox\.com/).test(L.mapbox.config.HTTP_URL) && !require('../config.js')(location.hostname).GithubAPI) {
+        return function() {};
+    }
+    return function(selection) {
+        var name = selection.append('a')
+            .attr('target', '_blank');
+
+        selection.append('span').text(' | ');
+
+        var action = selection.append('a')
+            .attr('href', '#');
+
+        function nextLogin() {
+            action.text('login').on('click', login);
+            name
+                .text('anon')
+                .attr('href', '#')
+                .on('click', function() { d3.event.preventDefault(); });
+        }
+
+        function nextLogout() {
+            name.on('click', null);
+            action.text('logout').on('click', logout);
+        }
+
+        function login() {
+            d3.event.preventDefault();
+            context.user.authenticate();
+        }
+
+        function logout() {
+            d3.event.preventDefault();
+            context.user.logout();
+            nextLogin();
+        }
+
+        nextLogin();
+
+        if (context.user.token()) {
+            context.user.details(function(err, d) {
+                if (err) return;
+                name.text(d.login);
+                name.attr('href', d.html_url);
+                nextLogout();
+            });
+        }
+    };
+};
+
+},{"../config.js":159}],"topojson":[function(require,module,exports){
 var topojson = module.exports = require("./topojson");
 topojson.topology = require("./lib/topojson/topology");
 topojson.simplify = require("./lib/topojson/simplify");
@@ -30986,4 +30986,4 @@ topojson.bind = require("./lib/topojson/bind");
 topojson.stitch = require("./lib/topojson/stitch");
 topojson.scale = require("./lib/topojson/scale");
 
-},{"./lib/topojson/bind":95,"./lib/topojson/clockwise":98,"./lib/topojson/filter":102,"./lib/topojson/prune":106,"./lib/topojson/scale":108,"./lib/topojson/simplify":109,"./lib/topojson/stitch":111,"./lib/topojson/topology":112,"./topojson":124}]},{},[151]);
+},{"./lib/topojson/bind":107,"./lib/topojson/clockwise":110,"./lib/topojson/filter":114,"./lib/topojson/prune":118,"./lib/topojson/scale":120,"./lib/topojson/simplify":121,"./lib/topojson/stitch":123,"./lib/topojson/topology":124,"./topojson":136}]},{},[167]);

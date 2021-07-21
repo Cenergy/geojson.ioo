@@ -26,7 +26,6 @@ const UglifyJSPlugin = require("uglifyjs-webpack-plugin");
 
 module.exports = {
   entry: {
-    delegate: ["/src/delegate.js"],
     lib: [
       "/dist/d3.js",
       "/lib/hashchange.js",
@@ -41,8 +40,7 @@ module.exports = {
       "/lib/drag/leaflet.drag.js",
       "/lib/codemirror/lib/codemirror.js",
       "/lib/codemirror/mode/javascript/javascript.js",
-    ],
-    site: ["/src/index.js"],
+    ]
   },
 
   output: {
@@ -58,7 +56,7 @@ module.exports = {
     rules: [
       {
         test: /\.js$/,
-        exclude: /node_modules|fs/,
+        exclude: /node_modules/,
         use: {
           loader: 'babel-loader',
           options: {
