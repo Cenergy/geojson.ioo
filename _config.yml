@@ -1,0 +1,8 @@
+# vue deployer
+public_dir: dist
+
+deploy:
+  type: git
+  repo:
+    aigisss: root@aigisss:/home/git/geojson
+  branch: master
