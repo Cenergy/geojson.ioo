@@ -2,6 +2,13 @@ module.exports = function (context) {
   return function (selection) {
     var layers = [
       {
+        title: 'GEOQ',
+        layer: L.tileLayer('http://map.geoq.cn/ArcGIS/rest/services/ChinaOnlineCommunity/MapServer/tile/{z}/{y}/{x}', {
+            pane: 'overlayPane',
+            maxZoom: 22
+        })
+      },
+      {
         title: 'Mapbox',
         layer: L.tileLayer(
           'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/256/{z}/{x}/{y}?access_token=' +
@@ -52,12 +59,6 @@ module.exports = function (context) {
           url: 'https://services.arcgisonline.com/arcgis/rest/services/Specialty/Soil_Survey_Map/MapServer',
           opacity: 0.7,
         }),
-      },
-      {
-        title: 'OSM5',
-        layer: L.tileLayer('http://map.geoq.cn/ArcGIS/rest/services/ChinaOnlineCommunity/MapServer/tile/{z}/{y}/{x}', {
-            pane: 'overlayPane'
-        })
       },
       {
         title: 'TEST',

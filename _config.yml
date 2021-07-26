@@ -1,5 +1,5 @@
 # vue deployer
-public_dir: dist
+public_dir: public
 
 deploy:
   type: git
